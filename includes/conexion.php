@@ -1,8 +1,8 @@
 <?php
 $host = "localhost";
-$user = "root";
-$pass = "";
-$db   = "sistema_login";
+$user = "u873376862_admin_tplay";
+$pass = "Regionsur7";
+$db   = "u873376862_sistema_login";
 
 $conexion = mysqli_connect($host, $user, $pass, $db);
 
