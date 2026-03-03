@@ -9,7 +9,7 @@ if (!isset($_SESSION['usuario'])) {
 <html lang="es">
 <head><meta charset="UTF-8"><title>Dashboard</title></head>
 <body>
-    <h2>Bienvenido, <?= htmlspecialchars($_SESSION['usuario']) ?>!</h2>
+    <h2>Bienvenidos, <?= htmlspecialchars($_SESSION['usuario']) ?>!</h2>
     <a href="logout.php">Cerrar sesión</a>
 </body>
 </html>
