@@ -137,7 +137,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php endif; ?>
 
     <form method="POST">
-        <label for="usuario">Usuario</label>
+        <label for="usuario">Numero de empleado</label>
         <input type="text" id="usuario" name="usuario" placeholder="Tu nombre de usuario" required>
 
         <label for="password">Contraseña</label>
