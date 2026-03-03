@@ -18,7 +18,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if ($hash && password_verify($pass, $hash)) {
         session_start();
         $_SESSION['usuario'] = $user;
-        header("Location: dashboard.php");
+        header("Location: index.php");
         exit();
     } else {
         $error = "Usuario o contraseña incorrectos.";
