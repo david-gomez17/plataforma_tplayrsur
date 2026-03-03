@@ -146,9 +146,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <button type="submit">Entrar</button>
     </form>
 
-    <div class="register-link">
-        ¿No tienes cuenta? <a href="registro.php">Regístrate aquí</a>
-    </div>
 </div>
 
 </body>
