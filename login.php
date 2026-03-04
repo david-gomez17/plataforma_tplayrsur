@@ -7,23 +7,26 @@ include 'conexion.php';
 $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $user  = $_POST['usuario'];
-    $pass  = $_POST['password'];
+    $user = trim($_POST['usuario']);
+    $pass = trim($_POST['password']);
 
-    $stmt = mysqli_prepare($conexion, "SELECT password FROM usuarios WHERE username = ?");
+    $stmt = mysqli_prepare($conexion, "SELECT id, password, rol, numero_talento_gs FROM usuarios WHERE username = ?");
     mysqli_stmt_bind_param($stmt, "s", $user);
     mysqli_stmt_execute($stmt);
-    mysqli_stmt_bind_result($stmt, $hash);
+    mysqli_stmt_bind_result($stmt, $id, $hash, $rol, $talento_gs);
     mysqli_stmt_fetch($stmt);
     mysqli_stmt_close($stmt);
 
     if ($hash && password_verify($pass, $hash)) {
         session_start();
-        $_SESSION['usuario'] = $user;
+        $_SESSION['usuario']           = $user;
+        $_SESSION['id']                = $id;
+        $_SESSION['rol']               = $rol;
+        $_SESSION['numero_talento_gs'] = $talento_gs;
         header("Location: index.php");
         exit();
     } else {
-        $error = "Usuario o contraseña incorrectos.";
+        $error = "Número de empleado o contraseña incorrectos.";
     }
 }
 ?>
