@@ -16,14 +16,17 @@ $rol            = $_SESSION['rol'] ?? 'vendedor';
 $talento_gs     = $_SESSION['numero_talento_gs'] ?? '';
 $nombre_usuario = $_SESSION['usuario'] ?? '';
 
+// Puestos comerciales para HC
+$puestos_comerciales = "'PROMOVENDEDOR PUNTO DE VENTA','VENDEDOR','VENDEDOR NEGOCIOS','VENDEDOR NEGOCIO'";
+
 // ── FUNCIONES DE JERARQUÍA ──────────────────────────────────────────────────
 function getSubordinados($conexion, $lr, $semana = null, $anio = null) {
     $ids = [];
     if ($semana && $anio) {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT numero_talento_gs FROM hc WHERE lr = ? AND numero_talento_gs != 'VACANTE' AND semana = ? AND anio = ?");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT numero_talento_gs FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
         mysqli_stmt_bind_param($stmt, "sii", $lr, $semana, $anio);
     } else {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT numero_talento_gs FROM hc WHERE lr = ? AND numero_talento_gs != 'VACANTE'");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT numero_talento_gs FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
         mysqli_stmt_bind_param($stmt, "s", $lr);
     }
     mysqli_stmt_execute($stmt);
@@ -79,7 +82,7 @@ if ($res_sem && $row_sem = mysqli_fetch_assoc($res_sem)) {
     if ($semana_display > 52) {
         $semana_display = 1;
     }
-}   
+}
 
 // ── NIVELES POR ROL ─────────────────────────────────────────────────────────
 $niveles = [
@@ -144,15 +147,15 @@ $kpi_hc_act = 0;
 $kpi_hc_vac = 0;
 if ($semana_actual && $anio_actual) {
     $r_hc_act = kpiQuery($conexion,
-        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs!='VACANTE' AND semana=$semana_actual AND anio=$anio_actual",
-        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs!='VACANTE' AND semana=? AND anio=? AND numero_talento_gs IN (__PH__)",
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs NOT LIKE '%VACANTE%' AND semana=$semana_actual AND anio=$anio_actual AND posicion IN ($puestos_comerciales)",
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs NOT LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND numero_talento_gs IN (__PH__)",
         $rol, $vendedores_ids, [$semana_actual, $anio_actual], 'ii'
     );
     $kpi_hc_act = $r_hc_act ? (mysqli_fetch_assoc($r_hc_act)['total'] ?? 0) : 0;
 
     $r_hc_vac = kpiQuery($conexion,
-        "SELECT COUNT(*) as total FROM hc WHERE nombre_colaborador='VACANTE' AND semana=$semana_actual AND anio=$anio_actual",
-        "SELECT COUNT(*) as total FROM hc WHERE nombre_colaborador='VACANTE' AND semana=? AND anio=? AND lr IN (__PH__)",
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=$semana_actual AND anio=$anio_actual AND posicion IN ($puestos_comerciales)",
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND lr IN (__PH__)",
         $rol, $vendedores_ids, [$semana_actual, $anio_actual], 'ii'
     );
     $kpi_hc_vac = $r_hc_vac ? (mysqli_fetch_assoc($r_hc_vac)['total'] ?? 0) : 0;
@@ -225,7 +228,6 @@ $roles_labels = [
         :root {
             --blue:   #2b57a7;
             --blue2:  #3b66b8;
-            --blue3:  #5b86d8;
             --bg:     #f4f6fb;
             --white:  #ffffff;
             --text:   #1a2540;
@@ -239,7 +241,6 @@ $roles_labels = [
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
 
-        /* SIDEBAR */
         .sidebar { width: var(--sidebar); background: var(--blue); min-height: 100vh; position: fixed; top:0; left:0; display: flex; flex-direction: column; align-items: center; padding: 28px 0; z-index: 100; }
         .sidebar-logo { color: white; font-size: 2rem; margin-bottom: 6px; }
         .sidebar-brand { color: rgba(255,255,255,0.9); font-size: 0.72rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 32px; text-align: center; padding: 0 12px; }
@@ -250,10 +251,8 @@ $roles_labels = [
         .logout-btn { display: block; text-align: center; padding: 10px; border-radius: 8px; color: rgba(255,255,255,0.6); text-decoration: none; font-size: 0.78rem; font-weight: 600; transition: all 0.2s; }
         .logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
-        /* MAIN */
         .main { margin-left: var(--sidebar); flex: 1; padding: 32px; }
 
-        /* HEADER */
         .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
         .page-header h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
         .page-header p { font-size: 0.82rem; color: var(--text2); margin-top: 2px; }
@@ -262,7 +261,6 @@ $roles_labels = [
         .user-name { font-size: 0.82rem; font-weight: 700; }
         .user-role { font-size: 0.7rem; color: var(--text2); }
 
-        /* KPIs */
         .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
         .kpi-card { background: var(--white); border-radius: 16px; padding: 22px 24px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
         .kpi-card.full { grid-column: span 2; }
@@ -281,7 +279,6 @@ $roles_labels = [
         .kpi-val.red    { color: var(--red); }
         .kpi-sub { font-size: 0.7rem; color: var(--text2); margin-top: 4px; font-weight: 600; }
 
-        /* CHARTS */
         .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
         .chart-card { background: var(--white); border-radius: 16px; padding: 22px 24px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
         .chart-title { font-size: 0.88rem; font-weight: 700; margin-bottom: 16px; color: var(--text); }
