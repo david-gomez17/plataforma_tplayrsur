@@ -49,8 +49,13 @@ $semana_actual = null;
 $anio_actual   = null;
 $res_sem = mysqli_query($conexion, "SELECT semana, anio FROM hc ORDER BY anio DESC, semana DESC LIMIT 1");
 if ($row_sem = mysqli_fetch_assoc($res_sem)) {
-    $semana_actual = $row_sem['semana'];
+    $semana_actual = $row_sem['semana'] + 1;
     $anio_actual   = $row_sem['anio'];
+    // Si la semana pasa de 52, reinicia al año siguiente
+    if ($semana_actual > 52) {
+        $semana_actual = 1;
+        $anio_actual++;
+    }
 }
 
 // Niveles por rol
