@@ -1,4 +1,6 @@
 <?php
+ini_set('display_errors', 0);
+error_reporting(0);
 header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
@@ -10,8 +12,8 @@ if (!isset($_SESSION['usuario'])) {
 
 include 'conexion.php';
 
-$rol        = $_SESSION['rol'] ?? 'vendedor';
-$talento_gs = $_SESSION['numero_talento_gs'] ?? '';
+$rol            = $_SESSION['rol'] ?? 'vendedor';
+$talento_gs     = $_SESSION['numero_talento_gs'] ?? '';
 $nombre_usuario = $_SESSION['usuario'] ?? '';
 
 // ── FUNCIONES DE JERARQUÍA ──────────────────────────────────────────────────
@@ -44,64 +46,11 @@ function getTodosVendedores($conexion, $lr, $niveles_restantes, $semana = null, 
     return array_unique($todos);
 }
 
-// Semana y año más recientes
-$semana_actual = null;
-$anio_actual   = null;
-$res_sem = mysqli_query($conexion, "SELECT semana, anio FROM hc ORDER BY anio DESC, semana DESC LIMIT 1");
-if ($row_sem = mysqli_fetch_assoc($res_sem)) {
-    $semana_actual = $row_sem['semana'] + 1;
-    $anio_actual   = $row_sem['anio'];
-    // Si la semana pasa de 52, reinicia al año siguiente
-    if ($semana_actual > 52) {
-        $semana_actual = 1;
-        $anio_actual++;
-    }
-}
-
-// Niveles por rol
-$niveles = [
-    'admin'              => 6,
-    'director_regional'  => 5,
-    'director_distrital' => 4,
-    'lider'              => 3,
-    'coach'              => 2,
-    'vendedor'           => 1,
-];
-$nivel = $niveles[$rol] ?? 1;
-
-$vendedores_ids   = [];
-$distrito_usuario = '';
-$posicion_usuario = '';
-$nombre_completo  = $nombre_usuario;
-
-// Nombre desde HC
-$stmt_nombre = mysqli_prepare($conexion, "SELECT nombre_colaborador, posicion, distrito FROM hc WHERE numero_talento_gs = ? LIMIT 1");
-mysqli_stmt_bind_param($stmt_nombre, "s", $talento_gs);
-mysqli_stmt_execute($stmt_nombre);
-$res_nombre = mysqli_stmt_get_result($stmt_nombre);
-if ($row_nombre = mysqli_fetch_assoc($res_nombre)) {
-    $nombre_completo  = $row_nombre['nombre_colaborador'];
-    $posicion_usuario = $row_nombre['posicion'];
-    $distrito_usuario = $row_nombre['distrito'];
-}
-mysqli_stmt_close($stmt_nombre);
-
-if ($rol !== 'admin') {
-    $vendedores_ids = getTodosVendedores($conexion, $talento_gs, $nivel, $semana_actual, $anio_actual);
-    $vendedores_ids[] = $talento_gs;
-    $vendedores_ids = array_unique(array_values($vendedores_ids));
-}
-
-$mes_actual = (int)date('n');
-$anio_query = (int)date('Y');
-
-// Helper query con folio_empleado IN (ids)
 function kpiQuery($conexion, $sql_admin, $sql_filtered, $rol, $ids, $extra_params, $extra_types) {
     if ($rol === 'admin') {
         return mysqli_query($conexion, $sql_admin);
     }
     if (empty($ids)) {
-        // No hay subordinados
         return mysqli_query($conexion, "SELECT 0 as total, 0 as p2, 0 as p3, 0 as t");
     }
     $ph   = implode(',', array_fill(0, count($ids), '?'));
@@ -114,13 +63,74 @@ function kpiQuery($conexion, $sql_admin, $sql_filtered, $rol, $ids, $extra_param
     return mysqli_stmt_get_result($stmt);
 }
 
+// ── SEMANA Y AÑO MÁS RECIENTES ─────────────────────────────────────────────
+$semana_actual = null;
+$anio_actual   = null;
+$semana_display = '-';
+$anio_display   = '-';
+
+$res_sem = mysqli_query($conexion, "SELECT semana, anio FROM hc ORDER BY anio DESC, semana DESC LIMIT 1");
+if ($res_sem && $row_sem = mysqli_fetch_assoc($res_sem)) {
+    $semana_base    = (int)$row_sem['semana'];
+    $anio_actual    = (int)$row_sem['anio'];
+    $semana_actual  = $semana_base + 1;
+    if ($semana_actual > 52) {
+        $semana_actual = 1;
+        $anio_actual++;
+    }
+    $semana_display = $semana_actual;
+    $anio_display   = $anio_actual;
+}
+
+// ── NIVELES POR ROL ─────────────────────────────────────────────────────────
+$niveles = [
+    'admin'              => 6,
+    'director_regional'  => 5,
+    'director_distrital' => 4,
+    'lider'              => 3,
+    'coach'              => 2,
+    'vendedor'           => 1,
+];
+$nivel = $niveles[$rol] ?? 1;
+
+// ── DATOS DEL USUARIO DESDE HC ──────────────────────────────────────────────
+$nombre_completo  = $nombre_usuario;
+$posicion_usuario = '';
+$distrito_usuario = '';
+
+$stmt_nombre = mysqli_prepare($conexion, "SELECT nombre_colaborador, posicion, distrito FROM hc WHERE numero_talento_gs = ? LIMIT 1");
+if ($stmt_nombre) {
+    mysqli_stmt_bind_param($stmt_nombre, "s", $talento_gs);
+    mysqli_stmt_execute($stmt_nombre);
+    $res_nombre = mysqli_stmt_get_result($stmt_nombre);
+    if ($row_nombre = mysqli_fetch_assoc($res_nombre)) {
+        $nombre_completo  = $row_nombre['nombre_colaborador'] ?? $nombre_usuario;
+        $posicion_usuario = $row_nombre['posicion'] ?? '';
+        $distrito_usuario = $row_nombre['distrito'] ?? '';
+    }
+    mysqli_stmt_close($stmt_nombre);
+}
+
+// ── SUBORDINADOS ────────────────────────────────────────────────────────────
+$vendedores_ids = [];
+if ($rol !== 'admin') {
+    $vendedores_ids = getTodosVendedores($conexion, $talento_gs, $nivel, $semana_actual, $anio_actual);
+    $vendedores_ids[] = $talento_gs;
+    $vendedores_ids = array_unique(array_values($vendedores_ids));
+}
+
+$mes_actual = (int)date('n');
+$anio_query = (int)date('Y');
+
+// ── KPIs ────────────────────────────────────────────────────────────────────
+
 // INSTALACIONES MES
 $r_inst = kpiQuery($conexion,
     "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query",
     "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
     $rol, $vendedores_ids, [$mes_actual, $anio_query], 'ii'
 );
-$kpi_inst = mysqli_fetch_assoc($r_inst)['total'] ?? 0;
+$kpi_inst = $r_inst ? (mysqli_fetch_assoc($r_inst)['total'] ?? 0) : 0;
 
 // VENTAS MES
 $r_vent = kpiQuery($conexion,
@@ -128,46 +138,49 @@ $r_vent = kpiQuery($conexion,
     "SELECT COUNT(*) as total FROM ventas WHERE MONTH(fecha_cierre)=? AND YEAR(fecha_cierre)=? AND folio_empleado IN (__PH__)",
     $rol, $vendedores_ids, [$mes_actual, $anio_query], 'ii'
 );
-$kpi_vent = mysqli_fetch_assoc($r_vent)['total'] ?? 0;
+$kpi_vent = $r_vent ? (mysqli_fetch_assoc($r_vent)['total'] ?? 0) : 0;
 
-// HC ACTIVO
-$r_hc_act = kpiQuery($conexion,
-    "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs!='VACANTE' AND semana=$semana_actual AND anio=$anio_actual",
-    "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs!='VACANTE' AND semana=? AND anio=? AND numero_talento_gs IN (__PH__)",
-    $rol, $vendedores_ids, [$semana_actual, $anio_actual], 'ii'
-);
-$kpi_hc_act = mysqli_fetch_assoc($r_hc_act)['total'] ?? 0;
+// HC ACTIVO Y VACANTE
+$kpi_hc_act = 0;
+$kpi_hc_vac = 0;
+if ($semana_actual && $anio_actual) {
+    $r_hc_act = kpiQuery($conexion,
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs!='VACANTE' AND semana=$semana_actual AND anio=$anio_actual",
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs!='VACANTE' AND semana=? AND anio=? AND numero_talento_gs IN (__PH__)",
+        $rol, $vendedores_ids, [$semana_actual, $anio_actual], 'ii'
+    );
+    $kpi_hc_act = $r_hc_act ? (mysqli_fetch_assoc($r_hc_act)['total'] ?? 0) : 0;
 
-// HC VACANTE
-$r_hc_vac = kpiQuery($conexion,
-    "SELECT COUNT(*) as total FROM hc WHERE nombre_colaborador='VACANTE' AND semana=$semana_actual AND anio=$anio_actual",
-    "SELECT COUNT(*) as total FROM hc WHERE nombre_colaborador='VACANTE' AND semana=? AND anio=? AND lr IN (__PH__)",
-    $rol, $vendedores_ids, [$semana_actual, $anio_actual], 'ii'
-);
-$kpi_hc_vac = mysqli_fetch_assoc($r_hc_vac)['total'] ?? 0;
+    $r_hc_vac = kpiQuery($conexion,
+        "SELECT COUNT(*) as total FROM hc WHERE nombre_colaborador='VACANTE' AND semana=$semana_actual AND anio=$anio_actual",
+        "SELECT COUNT(*) as total FROM hc WHERE nombre_colaborador='VACANTE' AND semana=? AND anio=? AND lr IN (__PH__)",
+        $rol, $vendedores_ids, [$semana_actual, $anio_actual], 'ii'
+    );
+    $kpi_hc_vac = $r_hc_vac ? (mysqli_fetch_assoc($r_hc_vac)['total'] ?? 0) : 0;
+}
 
 $kpi_hc_total = $kpi_hc_act + $kpi_hc_vac;
 $kpi_hc_pct   = $kpi_hc_total > 0 ? round(($kpi_hc_act / $kpi_hc_total) * 100) : 0;
 
-// MIX INST
+// MIX INSTALACIONES
 $r_mix_inst = kpiQuery($conexion,
     "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query",
     "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
     $rol, $vendedores_ids, [$mes_actual, $anio_query], 'ii'
 );
-$mix_inst = mysqli_fetch_assoc($r_mix_inst);
-$inst_3p = $mix_inst['p3'] ?? 0;
-$inst_2p = $mix_inst['p2'] ?? 0;
+$mix_inst = $r_mix_inst ? mysqli_fetch_assoc($r_mix_inst) : ['p3'=>0,'p2'=>0];
+$inst_3p = (int)($mix_inst['p3'] ?? 0);
+$inst_2p = (int)($mix_inst['p2'] ?? 0);
 
-// MIX VENT
+// MIX VENTAS
 $r_mix_vent = kpiQuery($conexion,
     "SELECT SUM(nombre_plan LIKE '%TV%') as p3, SUM(nombre_plan NOT LIKE '%TV%') as p2 FROM ventas WHERE MONTH(fecha_cierre)=$mes_actual AND YEAR(fecha_cierre)=$anio_query",
     "SELECT SUM(nombre_plan LIKE '%TV%') as p3, SUM(nombre_plan NOT LIKE '%TV%') as p2 FROM ventas WHERE MONTH(fecha_cierre)=? AND YEAR(fecha_cierre)=? AND folio_empleado IN (__PH__)",
     $rol, $vendedores_ids, [$mes_actual, $anio_query], 'ii'
 );
-$mix_vent = mysqli_fetch_assoc($r_mix_vent);
-$vent_3p = $mix_vent['p3'] ?? 0;
-$vent_2p = $mix_vent['p2'] ?? 0;
+$mix_vent = $r_mix_vent ? mysqli_fetch_assoc($r_mix_vent) : ['p3'=>0,'p2'=>0];
+$vent_3p = (int)($mix_vent['p3'] ?? 0);
+$vent_2p = (int)($mix_vent['p2'] ?? 0);
 
 // EVOLUCIÓN 6 MESES
 $evolucion_inst = [];
@@ -189,8 +202,8 @@ for ($i = 5; $i >= 0; $i--) {
         "SELECT COUNT(*) as t FROM ventas WHERE MONTH(fecha_cierre)=? AND YEAR(fecha_cierre)=? AND folio_empleado IN (__PH__)",
         $rol, $vendedores_ids, [$m, $a], 'ii'
     );
-    $evolucion_inst[] = (int)(mysqli_fetch_assoc($ri)['t'] ?? 0);
-    $evolucion_vent[] = (int)(mysqli_fetch_assoc($rv)['t'] ?? 0);
+    $evolucion_inst[] = (int)(($ri ? mysqli_fetch_assoc($ri)['t'] : 0) ?? 0);
+    $evolucion_vent[] = (int)(($rv ? mysqli_fetch_assoc($rv)['t'] : 0) ?? 0);
 }
 
 $roles_labels = [
@@ -285,7 +298,6 @@ $roles_labels = [
 <aside class="sidebar">
     <div class="sidebar-logo">📊</div>
     <div class="sidebar-brand">TOTALXPEDIENT</div>
-
     <a href="index.php" class="nav-item active">
         <span class="nav-icon">⊞</span> Dashboard
     </a>
@@ -298,14 +310,12 @@ $roles_labels = [
     <a href="import/import_hc.php" class="nav-item">
         <span class="nav-icon">👥</span> Headcount
     </a>
-
     <div class="sidebar-bottom">
         <a href="logout.php" class="logout-btn">⎋ Cerrar sesión</a>
     </div>
 </aside>
 
 <main class="main">
-
     <div class="page-header">
         <div>
             <h2><?= htmlspecialchars($roles_labels[$rol] ?? $rol) ?> <?= htmlspecialchars($distrito_usuario) ?></h2>
@@ -320,7 +330,6 @@ $roles_labels = [
         </div>
     </div>
 
-    <!-- KPIs -->
     <div class="kpi-grid">
         <div class="kpi-card">
             <div class="kpi-header">
@@ -351,7 +360,7 @@ $roles_labels = [
         <div class="kpi-card full">
             <div class="kpi-header">
                 <div class="kpi-icon kpi-purple">👥</div>
-                <div class="kpi-label">Headcount — Semana <?= $semana_actual ?> · <?= $anio_actual ?></div>
+                <div class="kpi-label">Headcount — Semana <?= $semana_display ?> · <?= $anio_display ?></div>
             </div>
             <div class="kpi-numbers">
                 <div class="kpi-num">
@@ -370,7 +379,6 @@ $roles_labels = [
         </div>
     </div>
 
-    <!-- MIX 2P/3P -->
     <div class="charts-row">
         <div class="chart-card">
             <div class="chart-title">Mix 2P y 3P — Instalaciones</div>
@@ -382,7 +390,6 @@ $roles_labels = [
         </div>
     </div>
 
-    <!-- EVOLUCIÓN -->
     <div class="evo-card">
         <div class="chart-title">Instalaciones y Ventas — Últimos 6 meses</div>
         <div class="evo-grid">
@@ -396,19 +403,18 @@ $roles_labels = [
             </div>
         </div>
     </div>
-
 </main>
 
 <script>
 const labels6 = <?= json_encode($meses_labels) ?>;
 const instEvo = <?= json_encode($evolucion_inst) ?>;
 const ventEvo = <?= json_encode($evolucion_vent) ?>;
-const inst2p  = <?= (int)$inst_2p ?>;
-const inst3p  = <?= (int)$inst_3p ?>;
-const vent2p  = <?= (int)$vent_2p ?>;
-const vent3p  = <?= (int)$vent_3p ?>;
+const inst2p  = <?= $inst_2p ?>;
+const inst3p  = <?= $inst_3p ?>;
+const vent2p  = <?= $vent_2p ?>;
+const vent3p  = <?= $vent_3p ?>;
 
-const donutOpts = (colors) => ({
+const donutOpts = () => ({
     responsive: true, maintainAspectRatio: false,
     plugins: {
         legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 16 } },
@@ -432,7 +438,7 @@ new Chart(document.getElementById('cVentMix'), {
     options: donutOpts()
 });
 
-const barOpts = (color) => ({
+const barOpts = () => ({
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
@@ -444,13 +450,13 @@ const barOpts = (color) => ({
 new Chart(document.getElementById('cInstEvo'), {
     type: 'bar',
     data: { labels: labels6, datasets: [{ data: instEvo, backgroundColor: '#3b66b8', borderRadius: 6 }] },
-    options: barOpts('#3b66b8')
+    options: barOpts()
 });
 
 new Chart(document.getElementById('cVentEvo'), {
     type: 'bar',
     data: { labels: labels6, datasets: [{ data: ventEvo, backgroundColor: '#10b981', borderRadius: 6 }] },
-    options: barOpts('#10b981')
+    options: barOpts()
 });
 </script>
 </body>
