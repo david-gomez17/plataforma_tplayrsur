@@ -64,8 +64,8 @@ function kpiQuery($conexion, $sql_admin, $sql_filtered, $rol, $ids, $extra_param
 }
 
 // ── SEMANA Y AÑO MÁS RECIENTES ─────────────────────────────────────────────
-$semana_actual = null;
-$anio_actual   = null;
+$semana_actual  = null;
+$anio_actual    = null;
 $semana_display = '-';
 $anio_display   = '-';
 
@@ -73,14 +73,13 @@ $res_sem = mysqli_query($conexion, "SELECT semana, anio FROM hc ORDER BY anio DE
 if ($res_sem && $row_sem = mysqli_fetch_assoc($res_sem)) {
     $semana_base    = (int)$row_sem['semana'];
     $anio_actual    = (int)$row_sem['anio'];
-    $semana_actual  = $semana_base + 1;
-    if ($semana_actual > 52) {
-        $semana_actual = 1;
-        $anio_actual++;
-    }
-    $semana_display = $semana_actual;
+    $semana_actual  = $semana_base;       // para queries: busca semana 9
+    $semana_display = $semana_base + 1;   // para pantalla: muestra semana 10
     $anio_display   = $anio_actual;
-}
+    if ($semana_display > 52) {
+        $semana_display = 1;
+    }
+}   
 
 // ── NIVELES POR ROL ─────────────────────────────────────────────────────────
 $niveles = [
