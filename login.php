@@ -10,7 +10,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $user  = $_POST['usuario'];
     $pass  = $_POST['password'];
 
-    // Usamos prepared statement para evitar SQL Injection
     $stmt = mysqli_prepare($conexion, "SELECT password FROM usuarios WHERE username = ?");
     mysqli_stmt_bind_param($stmt, "s", $user);
     mysqli_stmt_execute($stmt);
@@ -33,122 +32,145 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOTALXPEDIENT - Login</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Contenedor Izquierdo (Formulario) */
+        .login-section {
+            flex: 1;
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        /* Contenedor Derecho (Azul) */
+        .brand-section {
+            flex: 1;
+            background-color: #2b57a7; /* Azul Totalplay */
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
         }
 
-        .card {
-            background: white;
-            padding: 40px 36px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        .form-container {
             width: 100%;
-            max-width: 380px;
+            max-width: 400px;
         }
 
-        h2 {
-            margin-bottom: 24px;
-            color: #1a1a2e;
-            font-size: 1.6rem;
-            text-align: center;
+        .logo-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 50px;
+        }
+
+        .logo-header img {
+            height: 60px; /* Ajusta según tus imágenes */
+            margin-right: 15px;
+        }
+
+        .logo-header h1 {
+            color: #2b57a7;
+            font-size: 2.2rem;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+
+        .brand-section img {
+            width: 70%; /* Ajusta el tamaño del logo blanco */
+            max-width: 450px;
         }
 
         label {
             display: block;
-            margin-bottom: 6px;
-            font-size: 0.85rem;
-            color: #555;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+            color: #4a66a0;
             font-weight: 600;
         }
 
         input {
             width: 100%;
-            padding: 10px 14px;
-            margin-bottom: 18px;
-            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 25px;
+            border: 1px solid #dce0e9;
             border-radius: 8px;
-            font-size: 0.95rem;
-            transition: border 0.2s;
+            font-size: 1rem;
+            background-color: #fcfcfc;
             outline: none;
-        }
-
-        input:focus {
-            border-color: #4f46e5;
         }
 
         button {
             width: 100%;
-            padding: 12px;
-            background: #4f46e5;
+            padding: 15px;
+            background-color: #3b66b8;
             color: white;
             border: none;
             border-radius: 8px;
-            font-size: 1rem;
+            font-size: 1.1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.3s;
+            margin-top: 10px;
         }
 
         button:hover {
-            background: #4338ca;
+            background-color: #2b57a7;
         }
 
         .error {
-            background: #fee2e2;
-            color: #b91c1c;
-            padding: 10px 14px;
-            border-radius: 8px;
-            margin-bottom: 16px;
+            color: #d93025;
+            margin-bottom: 20px;
             font-size: 0.9rem;
-            text-align: center;
-        }
-
-        .register-link {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 0.88rem;
-            color: #555;
-        }
-
-        .register-link a {
-            color: #4f46e5;
-            text-decoration: none;
+            text-align: left;
             font-weight: 600;
         }
 
-        .register-link a:hover {
-            text-decoration: underline;
+        /* Responsivo para móviles */
+        @media (max-width: 768px) {
+            .brand-section { display: none; }
         }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Iniciar Sesión</h2>
+<div class="login-section">
+    <div class="form-container">
+        
+        <div class="logo-header">
+            <img src="logo_carpeta.png" alt="Logo">
+            <h1>TOTALXPEDIENT</h1>
+        </div>
 
-    <?php if ($error): ?>
-        <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+        <?php if ($error): ?>
+            <div class="error"><?= htmlspecialchars($error) ?></div>
+        <?php endif; ?>
 
-    <form method="POST">
-        <label for="usuario">Numero de empleado</label>
-        <input type="text" id="usuario" name="usuario" placeholder="Tu numero de empleado" required>
+        <form method="POST">
+            <label for="usuario">Numero de Empleado</label>
+            <input type="text" id="usuario" name="usuario" required>
 
-        <label for="password">Contraseña</label>
-        <input type="password" id="password" name="password" placeholder="••••••••" required>
+            <label for="password">Contraseña</label>
+            <input type="password" id="password" name="password" required>
 
-        <button type="submit">Entrar</button>
-    </form>
+            <button type="submit">Ingresar</button>
+        </form>
+    </div>
+</div>
 
+<div class="brand-section">
+    <img src="totalplay_blanco.png" alt="totalplay_Logo">
 </div>
 
 </body>
