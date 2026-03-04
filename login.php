@@ -141,7 +141,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     <form method="POST">
         <label for="usuario">Numero de empleado</label>
-        <input type="text" id="usuario" name="usuario" placeholder="Tu nombre de usuario" required>
+        <input type="text" id="usuario" name="usuario" placeholder="Tu numero de empleado" required>
 
         <label for="password">Contraseña</label>
         <input type="password" id="password" name="password" placeholder="••••••••" required>
