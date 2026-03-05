@@ -14,36 +14,37 @@ include 'conexion.php';
 
 $rol            = $_SESSION['rol'] ?? 'vendedor';
 $talento_gs     = $_SESSION['numero_talento_gs'] ?? '';
+$id_posicion    = $_SESSION['id_posicion'] ?? '';
 $nombre_usuario = $_SESSION['usuario'] ?? '';
 
 // Puestos comerciales para HC
 $puestos_comerciales = "'PROMOVENDEDOR PUNTO DE VENTA','VENDEDOR','VENDEDOR NEGOCIOS','VENDEDOR NEGOCIO'";
 
-// ── FUNCIONES DE JERARQUÍA ──────────────────────────────────────────────────
-function getSubordinados($conexion, $lr, $semana = null, $anio = null) {
+// ── FUNCIONES DE JERARQUÍA POR id_posicion ──────────────────────────────────
+function getSubordinados($conexion, $id_pos, $semana = null, $anio = null) {
     $ids = [];
     if ($semana && $anio) {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT numero_talento_gs FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
-        mysqli_stmt_bind_param($stmt, "sii", $lr, $semana, $anio);
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
+        mysqli_stmt_bind_param($stmt, "sii", $id_pos, $semana, $anio);
     } else {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT numero_talento_gs FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
-        mysqli_stmt_bind_param($stmt, "s", $lr);
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
+        mysqli_stmt_bind_param($stmt, "s", $id_pos);
     }
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
     while ($row = mysqli_fetch_assoc($res)) {
-        $ids[] = $row['numero_talento_gs'];
+        $ids[] = $row['id_posicion'];
     }
     mysqli_stmt_close($stmt);
     return $ids;
 }
 
-function getTodosVendedores($conexion, $lr, $niveles_restantes, $semana = null, $anio = null) {
+function getTodosSubordinados($conexion, $id_pos, $niveles_restantes, $semana = null, $anio = null) {
     if ($niveles_restantes <= 0) return [];
-    $directos = getSubordinados($conexion, $lr, $semana, $anio);
+    $directos = getSubordinados($conexion, $id_pos, $semana, $anio);
     $todos = $directos;
     foreach ($directos as $id) {
-        $sub = getTodosVendedores($conexion, $id, $niveles_restantes - 1, $semana, $anio);
+        $sub = getTodosSubordinados($conexion, $id, $niveles_restantes - 1, $semana, $anio);
         $todos = array_merge($todos, $sub);
     }
     return array_unique($todos);
@@ -60,7 +61,7 @@ function kpiQuery($conexion, $sql_admin, $sql_filtered, $rol, $ids, $extra_param
     $sql  = str_replace('__PH__', $ph, $sql_filtered);
     $stmt = mysqli_prepare($conexion, $sql);
     $tipos = $extra_types . str_repeat('s', count($ids));
-    $bind  = array_merge($extra_params, $ids);
+    $bind  = array_merge($extra_params, array_values($ids));
     mysqli_stmt_bind_param($stmt, $tipos, ...$bind);
     mysqli_stmt_execute($stmt);
     return mysqli_stmt_get_result($stmt);
@@ -76,8 +77,8 @@ $res_sem = mysqli_query($conexion, "SELECT semana, anio FROM hc ORDER BY anio DE
 if ($res_sem && $row_sem = mysqli_fetch_assoc($res_sem)) {
     $semana_base    = (int)$row_sem['semana'];
     $anio_actual    = (int)$row_sem['anio'];
-    $semana_actual  = $semana_base;       // para queries: busca semana 9
-    $semana_display = $semana_base + 1;   // para pantalla: muestra semana 10
+    $semana_actual  = $semana_base;
+    $semana_display = $semana_base + 1;
     $anio_display   = $anio_actual;
     if ($semana_display > 52) {
         $semana_display = 1;
@@ -100,9 +101,9 @@ $nombre_completo  = $nombre_usuario;
 $posicion_usuario = '';
 $distrito_usuario = '';
 
-$stmt_nombre = mysqli_prepare($conexion, "SELECT nombre_colaborador, posicion, distrito FROM hc WHERE numero_talento_gs = ? LIMIT 1");
+$stmt_nombre = mysqli_prepare($conexion, "SELECT nombre_colaborador, posicion, distrito FROM hc WHERE id_posicion = ? LIMIT 1");
 if ($stmt_nombre) {
-    mysqli_stmt_bind_param($stmt_nombre, "s", $talento_gs);
+    mysqli_stmt_bind_param($stmt_nombre, "s", $id_posicion);
     mysqli_stmt_execute($stmt_nombre);
     $res_nombre = mysqli_stmt_get_result($stmt_nombre);
     if ($row_nombre = mysqli_fetch_assoc($res_nombre)) {
@@ -113,12 +114,28 @@ if ($stmt_nombre) {
     mysqli_stmt_close($stmt_nombre);
 }
 
-// ── SUBORDINADOS ────────────────────────────────────────────────────────────
-$vendedores_ids = [];
+// ── SUBORDINADOS POR id_posicion ────────────────────────────────────────────
+$subordinados_ids = [];  // id_posicion de todos los subordinados
+$folio_ids        = [];  // folio_empleado = numero_talento_gs para filtrar ventas/instalaciones
+
 if ($rol !== 'admin') {
-    $vendedores_ids = getTodosVendedores($conexion, $talento_gs, $nivel, $semana_actual, $anio_actual);
-    $vendedores_ids[] = $talento_gs;
-    $vendedores_ids = array_unique(array_values($vendedores_ids));
+    $subordinados_ids = getTodosSubordinados($conexion, $id_posicion, $nivel, $semana_actual, $anio_actual);
+    $subordinados_ids[] = $id_posicion;
+    $subordinados_ids = array_unique(array_values($subordinados_ids));
+
+    // Obtener numero_talento_gs de todos los subordinados para filtrar ventas/instalaciones
+    if (!empty($subordinados_ids)) {
+        $ph_sub = implode(',', array_fill(0, count($subordinados_ids), '?'));
+        $stmt_folios = mysqli_prepare($conexion, "SELECT DISTINCT numero_talento_gs FROM hc WHERE id_posicion IN ($ph_sub) AND numero_talento_gs NOT LIKE '%VACANTE%'");
+        $tipos_sub = str_repeat('s', count($subordinados_ids));
+        mysqli_stmt_bind_param($stmt_folios, $tipos_sub, ...array_values($subordinados_ids));
+        mysqli_stmt_execute($stmt_folios);
+        $res_folios = mysqli_stmt_get_result($stmt_folios);
+        while ($row_f = mysqli_fetch_assoc($res_folios)) {
+            $folio_ids[] = $row_f['numero_talento_gs'];
+        }
+        mysqli_stmt_close($stmt_folios);
+    }
 }
 
 $mes_actual = (int)date('n');
@@ -130,7 +147,7 @@ $anio_query = (int)date('Y');
 $r_inst = kpiQuery($conexion,
     "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query",
     "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
-    $rol, $vendedores_ids, [$mes_actual, $anio_query], 'ii'
+    $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
 $kpi_inst = $r_inst ? (mysqli_fetch_assoc($r_inst)['total'] ?? 0) : 0;
 
@@ -138,7 +155,7 @@ $kpi_inst = $r_inst ? (mysqli_fetch_assoc($r_inst)['total'] ?? 0) : 0;
 $r_vent = kpiQuery($conexion,
     "SELECT COUNT(*) as total FROM ventas WHERE MONTH(fecha_cierre)=$mes_actual AND YEAR(fecha_cierre)=$anio_query",
     "SELECT COUNT(*) as total FROM ventas WHERE MONTH(fecha_cierre)=? AND YEAR(fecha_cierre)=? AND folio_empleado IN (__PH__)",
-    $rol, $vendedores_ids, [$mes_actual, $anio_query], 'ii'
+    $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
 $kpi_vent = $r_vent ? (mysqli_fetch_assoc($r_vent)['total'] ?? 0) : 0;
 
@@ -148,15 +165,15 @@ $kpi_hc_vac = 0;
 if ($semana_actual && $anio_actual) {
     $r_hc_act = kpiQuery($conexion,
         "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs NOT LIKE '%VACANTE%' AND semana=$semana_actual AND anio=$anio_actual AND posicion IN ($puestos_comerciales)",
-        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs NOT LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND numero_talento_gs IN (__PH__)",
-        $rol, $vendedores_ids, [$semana_actual, $anio_actual], 'ii'
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs NOT LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND id_posicion IN (__PH__)",
+        $rol, $subordinados_ids, [$semana_actual, $anio_actual], 'ii'
     );
     $kpi_hc_act = $r_hc_act ? (mysqli_fetch_assoc($r_hc_act)['total'] ?? 0) : 0;
 
     $r_hc_vac = kpiQuery($conexion,
         "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=$semana_actual AND anio=$anio_actual AND posicion IN ($puestos_comerciales)",
         "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND lr IN (__PH__)",
-        $rol, $vendedores_ids, [$semana_actual, $anio_actual], 'ii'
+        $rol, $subordinados_ids, [$semana_actual, $anio_actual], 'ii'
     );
     $kpi_hc_vac = $r_hc_vac ? (mysqli_fetch_assoc($r_hc_vac)['total'] ?? 0) : 0;
 }
@@ -168,7 +185,7 @@ $kpi_hc_pct   = $kpi_hc_total > 0 ? round(($kpi_hc_act / $kpi_hc_total) * 100) :
 $r_mix_inst = kpiQuery($conexion,
     "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query",
     "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
-    $rol, $vendedores_ids, [$mes_actual, $anio_query], 'ii'
+    $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
 $mix_inst = $r_mix_inst ? mysqli_fetch_assoc($r_mix_inst) : ['p3'=>0,'p2'=>0];
 $inst_3p = (int)($mix_inst['p3'] ?? 0);
@@ -178,7 +195,7 @@ $inst_2p = (int)($mix_inst['p2'] ?? 0);
 $r_mix_vent = kpiQuery($conexion,
     "SELECT SUM(nombre_plan LIKE '%TV%') as p3, SUM(nombre_plan NOT LIKE '%TV%') as p2 FROM ventas WHERE MONTH(fecha_cierre)=$mes_actual AND YEAR(fecha_cierre)=$anio_query",
     "SELECT SUM(nombre_plan LIKE '%TV%') as p3, SUM(nombre_plan NOT LIKE '%TV%') as p2 FROM ventas WHERE MONTH(fecha_cierre)=? AND YEAR(fecha_cierre)=? AND folio_empleado IN (__PH__)",
-    $rol, $vendedores_ids, [$mes_actual, $anio_query], 'ii'
+    $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
 $mix_vent = $r_mix_vent ? mysqli_fetch_assoc($r_mix_vent) : ['p3'=>0,'p2'=>0];
 $vent_3p = (int)($mix_vent['p3'] ?? 0);
@@ -197,12 +214,12 @@ for ($i = 5; $i >= 0; $i--) {
     $ri = kpiQuery($conexion,
         "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=$m AND YEAR(fecha)=$a",
         "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
-        $rol, $vendedores_ids, [$m, $a], 'ii'
+        $rol, $folio_ids, [$m, $a], 'ii'
     );
     $rv = kpiQuery($conexion,
         "SELECT COUNT(*) as t FROM ventas WHERE MONTH(fecha_cierre)=$m AND YEAR(fecha_cierre)=$a",
         "SELECT COUNT(*) as t FROM ventas WHERE MONTH(fecha_cierre)=? AND YEAR(fecha_cierre)=? AND folio_empleado IN (__PH__)",
-        $rol, $vendedores_ids, [$m, $a], 'ii'
+        $rol, $folio_ids, [$m, $a], 'ii'
     );
     $evolucion_inst[] = (int)(($ri ? mysqli_fetch_assoc($ri)['t'] : 0) ?? 0);
     $evolucion_vent[] = (int)(($rv ? mysqli_fetch_assoc($rv)['t'] : 0) ?? 0);
@@ -252,7 +269,6 @@ $roles_labels = [
         .logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
         .main { margin-left: var(--sidebar); flex: 1; padding: 32px; }
-
         .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
         .page-header h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
         .page-header p { font-size: 0.82rem; color: var(--text2); margin-top: 2px; }
