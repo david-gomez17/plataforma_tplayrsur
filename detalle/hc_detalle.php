@@ -36,36 +36,21 @@ $roles_labels = [
     'vendedor'           => 'Vendedor',
 ];
 
-// ── CONSTRUIR MATRIZ SEGÚN ROL ───────────────────────────────────────────────
-
-// Obtener directores según rol
 function getDirectores($conexion, $rol, $id_posicion, $semana, $anio) {
     if ($rol === 'admin' || $rol === 'director_regional') {
-        // Mostrar todos los directores distritales
-        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc 
-                WHERE posicion = 'DIRECTOR DISTRITAL' AND semana = ? AND anio = ? 
-                ORDER BY nombre_colaborador";
+        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc WHERE posicion = 'DIRECTOR DISTRITAL' AND semana = ? AND anio = ? ORDER BY nombre_colaborador";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "ii", $semana, $anio);
     } elseif ($rol === 'director_distrital') {
-        // Solo el director actual
-        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc 
-                WHERE id_posicion = ? AND semana = ? AND anio = ? LIMIT 1";
+        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc WHERE id_posicion = ? AND semana = ? AND anio = ? LIMIT 1";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $id_posicion, $semana, $anio);
     } elseif ($rol === 'lider') {
-        // El director al que reporta el lider
-        $sql = "SELECT DISTINCT h2.id_posicion, h2.nombre_colaborador FROM hc h1
-                INNER JOIN hc h2 ON h1.posicion_lr = h2.id_posicion
-                WHERE h1.id_posicion = ? AND h1.semana = ? AND h1.anio = ? LIMIT 1";
+        $sql = "SELECT DISTINCT h2.id_posicion, h2.nombre_colaborador FROM hc h1 INNER JOIN hc h2 ON h1.posicion_lr = h2.id_posicion WHERE h1.id_posicion = ? AND h1.semana = ? AND h1.anio = ? LIMIT 1";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $id_posicion, $semana, $anio);
     } elseif ($rol === 'coach') {
-        // Director del coach (2 niveles arriba)
-        $sql = "SELECT DISTINCT h3.id_posicion, h3.nombre_colaborador FROM hc h1
-                INNER JOIN hc h2 ON h1.posicion_lr = h2.id_posicion
-                INNER JOIN hc h3 ON h2.posicion_lr = h3.id_posicion
-                WHERE h1.id_posicion = ? AND h1.semana = ? AND h1.anio = ? LIMIT 1";
+        $sql = "SELECT DISTINCT h3.id_posicion, h3.nombre_colaborador FROM hc h1 INNER JOIN hc h2 ON h1.posicion_lr = h2.id_posicion INNER JOIN hc h3 ON h2.posicion_lr = h3.id_posicion WHERE h1.id_posicion = ? AND h1.semana = ? AND h1.anio = ? LIMIT 1";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $id_posicion, $semana, $anio);
     } else {
@@ -81,16 +66,11 @@ function getDirectores($conexion, $rol, $id_posicion, $semana, $anio) {
 
 function getLideres($conexion, $dir_id_posicion, $rol, $mi_id_posicion, $semana, $anio) {
     if ($rol === 'coach') {
-        // Solo el lider del coach
-        $sql = "SELECT DISTINCT h2.id_posicion, h2.nombre_colaborador FROM hc h1
-                INNER JOIN hc h2 ON h1.posicion_lr = h2.id_posicion
-                WHERE h1.id_posicion = ? AND h1.semana = ? AND h1.anio = ? LIMIT 1";
+        $sql = "SELECT DISTINCT h2.id_posicion, h2.nombre_colaborador FROM hc h1 INNER JOIN hc h2 ON h1.posicion_lr = h2.id_posicion WHERE h1.id_posicion = ? AND h1.semana = ? AND h1.anio = ? LIMIT 1";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $mi_id_posicion, $semana, $anio);
     } else {
-        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc 
-                WHERE posicion_lr = ? AND posicion LIKE '%LIDER VENTAS%' AND semana = ? AND anio = ?
-                ORDER BY nombre_colaborador";
+        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc WHERE posicion_lr = ? AND posicion LIKE '%LIDER VENTA%' AND semana = ? AND anio = ? ORDER BY nombre_colaborador";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $dir_id_posicion, $semana, $anio);
     }
@@ -104,15 +84,11 @@ function getLideres($conexion, $dir_id_posicion, $rol, $mi_id_posicion, $semana,
 
 function getCoaches($conexion, $lider_id_posicion, $rol, $mi_id_posicion, $semana, $anio) {
     if ($rol === 'coach') {
-        // Solo el coach actual
-        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc 
-                WHERE id_posicion = ? AND semana = ? AND anio = ? LIMIT 1";
+        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc WHERE id_posicion = ? AND semana = ? AND anio = ? LIMIT 1";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $mi_id_posicion, $semana, $anio);
     } else {
-        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc 
-                WHERE posicion_lr = ? AND posicion LIKE '%COACH%' AND semana = ? AND anio = ?
-                ORDER BY nombre_colaborador";
+        $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc WHERE posicion_lr = ? AND posicion LIKE '%COACH%' AND semana = ? AND anio = ? ORDER BY nombre_colaborador";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $lider_id_posicion, $semana, $anio);
     }
@@ -124,36 +100,30 @@ function getCoaches($conexion, $lider_id_posicion, $rol, $mi_id_posicion, $seman
     return $coaches;
 }
 
-function getHCCoach($conexion, $coach_id_posicion, $semana, $anio, $puestos_in) {
-    $activo  = 0;
-    $vacante = 0;
-
-    $sql_act = "SELECT COUNT(*) as total FROM hc 
-                WHERE posicion_lr = ? AND posicion IN ($puestos_in) 
-                AND numero_talento_gs NOT LIKE '%VACANTE%'
-                AND semana = ? AND anio = ?";
-    $stmt = mysqli_prepare($conexion, $sql_act);
+function getVendedores($conexion, $coach_id_posicion, $semana, $anio, $puestos_in) {
+    $sql = "SELECT nombre_colaborador, numero_talento_gs FROM hc 
+            WHERE posicion_lr = ? AND posicion IN ($puestos_in)
+            AND semana = ? AND anio = ?
+            ORDER BY numero_talento_gs LIKE '%VACANTE%', nombre_colaborador";
+    $stmt = mysqli_prepare($conexion, $sql);
     mysqli_stmt_bind_param($stmt, "sii", $coach_id_posicion, $semana, $anio);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
-    $activo = mysqli_fetch_assoc($res)['total'] ?? 0;
+    $vendedores = [];
+    while ($row = mysqli_fetch_assoc($res)) {
+        $es_vacante = stripos($row['numero_talento_gs'], 'VACANTE') !== false;
+        $vendedores[] = [
+            'nombre'     => $row['nombre_colaborador'],
+            'es_vacante' => $es_vacante,
+            'activo'     => $es_vacante ? 0 : 1,
+            'vacante'    => $es_vacante ? 1 : 0,
+        ];
+    }
     mysqli_stmt_close($stmt);
-
-    $sql_vac = "SELECT COUNT(*) as total FROM hc 
-                WHERE posicion_lr = ? AND posicion IN ($puestos_in) 
-                AND numero_talento_gs LIKE '%VACANTE%'
-                AND semana = ? AND anio = ?";
-    $stmt = mysqli_prepare($conexion, $sql_vac);
-    mysqli_stmt_bind_param($stmt, "sii", $coach_id_posicion, $semana, $anio);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-    $vacante = mysqli_fetch_assoc($res)['total'] ?? 0;
-    mysqli_stmt_close($stmt);
-
-    return ['activo' => $activo, 'vacante' => $vacante, 'total' => $activo + $vacante];
+    return $vendedores;
 }
 
-// Construir estructura de datos
+// Construir matriz
 $directores = getDirectores($conexion, $rol, $id_posicion, $semana_actual, $anio_actual);
 $matriz = [];
 
@@ -168,10 +138,18 @@ foreach ($directores as $dir) {
         $coaches_data = [];
 
         foreach ($coaches as $coach) {
-            $hc = getHCCoach($conexion, $coach['id_posicion'], $semana_actual, $anio_actual, $puestos_in);
-            $lid_activo  += $hc['activo'];
-            $lid_vacante += $hc['vacante'];
-            $coaches_data[] = ['nombre' => $coach['nombre_colaborador'], 'hc' => $hc];
+            $vendedores = getVendedores($conexion, $coach['id_posicion'], $semana_actual, $anio_actual, $puestos_in);
+            $c_activo  = array_sum(array_column($vendedores, 'activo'));
+            $c_vacante = array_sum(array_column($vendedores, 'vacante'));
+            $lid_activo  += $c_activo;
+            $lid_vacante += $c_vacante;
+            $coaches_data[] = [
+                'nombre'     => $coach['nombre_colaborador'],
+                'activo'     => $c_activo,
+                'vacante'    => $c_vacante,
+                'total'      => $c_activo + $c_vacante,
+                'vendedores' => $vendedores,
+            ];
         }
 
         $dir_activo  += $lid_activo;
@@ -181,7 +159,7 @@ foreach ($directores as $dir) {
             'activo'  => $lid_activo,
             'vacante' => $lid_vacante,
             'total'   => $lid_activo + $lid_vacante,
-            'coaches' => $coaches_data
+            'coaches' => $coaches_data,
         ];
     }
 
@@ -190,7 +168,7 @@ foreach ($directores as $dir) {
         'activo'  => $dir_activo,
         'vacante' => $dir_vacante,
         'total'   => $dir_activo + $dir_vacante,
-        'lideres' => $lids_data
+        'lideres' => $lids_data,
     ];
 }
 ?>
@@ -229,37 +207,35 @@ foreach ($directores as $dir) {
         .page-header { margin-bottom: 24px; }
         .page-header h2 { font-size: 1.5rem; font-weight: 700; }
         .page-header p { font-size: 0.82rem; color: var(--text2); margin-top: 2px; }
+        .semana-badge { display: inline-block; background: #e8f0fe; color: var(--blue); border-radius: 8px; padding: 4px 12px; font-size: 0.78rem; font-weight: 700; margin-left: 12px; }
 
-        /* TABLA */
         .table-card { background: var(--white); border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); overflow: hidden; }
         table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
         thead th { background: var(--blue); color: white; padding: 12px 16px; text-align: left; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; }
         thead th.num { text-align: center; }
-
         tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
-        tbody tr:hover { background: #f8faff; }
         tbody tr:last-child { border-bottom: none; }
-
         td { padding: 10px 16px; vertical-align: middle; }
         td.num { text-align: center; font-weight: 700; }
 
-        /* NIVELES */
         .row-director td { background: #eef2fb; font-weight: 700; font-size: 0.85rem; }
         .row-lider td { background: #f4f6fb; font-weight: 600; }
-        .row-lider td:first-child { padding-left: 28px; }
+        .row-lider td:nth-child(2) { padding-left: 28px; }
         .row-coach td { background: #ffffff; }
-        .row-coach td:first-child { padding-left: 44px; }
+        .row-coach td:nth-child(3) { padding-left: 44px; }
+        .row-vendedor td { background: #fafbff; color: #374151; }
+        .row-vendedor td:nth-child(4) { padding-left: 60px; }
+        .row-vendedor.vacante td { color: #9ca3af; font-style: italic; }
         .row-total td { background: #e8f0fe; font-weight: 700; font-size: 0.82rem; color: var(--blue); }
 
-        /* BADGES */
         .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; min-width: 36px; text-align: center; }
         .badge-green { background: #d1fae5; color: #065f46; }
         .badge-red   { background: #fee2e2; color: #991b1b; }
         .badge-gray  { background: #e2e8f4; color: #1a2540; }
         .badge-zero  { background: #f4f6fb; color: #9ca3af; }
 
-        .toggle-btn { cursor: pointer; user-select: none; margin-right: 6px; color: var(--blue); font-size: 0.9rem; }
-        .semana-badge { display: inline-block; background: #e8f0fe; color: var(--blue); border-radius: 8px; padding: 4px 12px; font-size: 0.78rem; font-weight: 700; margin-left: 12px; }
+        .toggle-btn { cursor: pointer; user-select: none; margin-right: 6px; color: var(--blue); font-size: 0.85rem; display: inline-block; width: 14px; }
+        tbody tr:hover td { filter: brightness(0.97); }
     </style>
 </head>
 <body>
@@ -267,18 +243,10 @@ foreach ($directores as $dir) {
 <aside class="sidebar">
     <div class="sidebar-logo">📊</div>
     <div class="sidebar-brand">TOTALXPEDIENT</div>
-    <a href="../index.php" class="nav-item">
-        <span class="nav-icon">⊞</span> Dashboard
-    </a>
-    <a href="../import/import_instalaciones.php" class="nav-item">
-        <span class="nav-icon">🔧</span> Instalaciones
-    </a>
-    <a href="../import/import_ventas.php" class="nav-item">
-        <span class="nav-icon">📈</span> Ventas
-    </a>
-    <a href="hc_detalle.php" class="nav-item active">
-        <span class="nav-icon">👥</span> Headcount
-    </a>
+    <a href="../index.php" class="nav-item"><span class="nav-icon">⊞</span> Dashboard</a>
+    <a href="../import/import_instalaciones.php" class="nav-item"><span class="nav-icon">🔧</span> Instalaciones</a>
+    <a href="../import/import_ventas.php" class="nav-item"><span class="nav-icon">📈</span> Ventas</a>
+    <a href="hc_detalle.php" class="nav-item active"><span class="nav-icon">👥</span> Headcount</a>
     <div class="sidebar-bottom">
         <a href="../logout.php" class="logout-btn">⎋ Cerrar sesión</a>
     </div>
@@ -297,6 +265,7 @@ foreach ($directores as $dir) {
                     <th>Director</th>
                     <th>Líder</th>
                     <th>Coach</th>
+                    <th>Vendedor</th>
                     <th class="num">Activo</th>
                     <th class="num">Vacante</th>
                     <th class="num">Total</th>
@@ -304,9 +273,10 @@ foreach ($directores as $dir) {
             </thead>
             <tbody>
             <?php foreach ($matriz as $di => $dir): ?>
+
                 <!-- DIRECTOR -->
                 <tr class="row-director" onclick="toggleDir(<?= $di ?>)" style="cursor:pointer;">
-                    <td colspan="3">
+                    <td colspan="4">
                         <span class="toggle-btn" id="icon-dir-<?= $di ?>">▼</span>
                         <?= htmlspecialchars($dir['nombre']) ?>
                     </td>
@@ -319,7 +289,7 @@ foreach ($directores as $dir) {
                 <!-- LIDER -->
                 <tr class="row-lider dir-<?= $di ?>" onclick="toggleLid(<?= $di ?>,<?= $li ?>)" style="cursor:pointer;">
                     <td></td>
-                    <td colspan="2">
+                    <td colspan="3">
                         <span class="toggle-btn" id="icon-lid-<?= $di ?>-<?= $li ?>">▼</span>
                         <?= htmlspecialchars($lid['nombre']) ?>
                     </td>
@@ -330,20 +300,46 @@ foreach ($directores as $dir) {
 
                 <?php foreach ($lid['coaches'] as $ci => $coach): ?>
                 <!-- COACH -->
-                <tr class="row-coach dir-<?= $di ?> lid-<?= $di ?>-<?= $li ?>">
+                <tr class="row-coach dir-<?= $di ?> lid-<?= $di ?>-<?= $li ?>" onclick="toggleCoach(<?= $di ?>,<?= $li ?>,<?= $ci ?>)" style="cursor:pointer;">
                     <td></td>
                     <td></td>
-                    <td><?= htmlspecialchars($coach['nombre']) ?></td>
-                    <td class="num"><span class="badge badge-green"><?= $coach['hc']['activo'] ?></span></td>
-                    <td class="num"><span class="badge <?= $coach['hc']['vacante'] > 0 ? 'badge-red' : 'badge-zero' ?>"><?= $coach['hc']['vacante'] ?></span></td>
-                    <td class="num"><span class="badge badge-gray"><?= $coach['hc']['total'] ?></span></td>
+                    <td colspan="2">
+                        <span class="toggle-btn" id="icon-coach-<?= $di ?>-<?= $li ?>-<?= $ci ?>">▼</span>
+                        <?= htmlspecialchars($coach['nombre']) ?>
+                    </td>
+                    <td class="num"><span class="badge badge-green"><?= $coach['activo'] ?></span></td>
+                    <td class="num"><span class="badge <?= $coach['vacante'] > 0 ? 'badge-red' : 'badge-zero' ?>"><?= $coach['vacante'] ?></span></td>
+                    <td class="num"><span class="badge badge-gray"><?= $coach['total'] ?></span></td>
                 </tr>
+
+                <?php foreach ($coach['vendedores'] as $vi => $vend): ?>
+                <!-- VENDEDOR -->
+                <tr class="row-vendedor <?= $vend['es_vacante'] ? 'vacante' : '' ?> dir-<?= $di ?> lid-<?= $di ?>-<?= $li ?> coach-<?= $di ?>-<?= $li ?>-<?= $ci ?>">
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td><?= htmlspecialchars($vend['nombre']) ?></td>
+                    <td class="num"><span class="badge <?= $vend['activo'] ? 'badge-green' : 'badge-zero' ?>"><?= $vend['activo'] ?></span></td>
+                    <td class="num"><span class="badge <?= $vend['vacante'] ? 'badge-red' : 'badge-zero' ?>"><?= $vend['vacante'] ?></span></td>
+                    <td class="num"><span class="badge badge-gray">1</span></td>
+                </tr>
+                <?php endforeach; ?>
+
+                <!-- TOTAL COACH -->
+                <tr class="row-total dir-<?= $di ?> lid-<?= $di ?>-<?= $li ?> coach-<?= $di ?>-<?= $li ?>-<?= $ci ?>">
+                    <td></td><td></td>
+                    <td colspan="2" style="padding-left:60px;">Total <?= htmlspecialchars($coach['nombre']) ?></td>
+                    <td class="num"><?= $coach['activo'] ?></td>
+                    <td class="num"><?= $coach['vacante'] ?></td>
+                    <td class="num"><?= $coach['total'] ?></td>
+                </tr>
+
                 <?php endforeach; ?>
 
                 <!-- TOTAL LIDER -->
                 <tr class="row-total dir-<?= $di ?> lid-<?= $di ?>-<?= $li ?>">
                     <td></td>
-                    <td colspan="2" style="padding-left:44px;">Total <?= htmlspecialchars($lid['nombre']) ?></td>
+                    <td colspan="3" style="padding-left:44px;">Total <?= htmlspecialchars($lid['nombre']) ?></td>
                     <td class="num"><?= $lid['activo'] ?></td>
                     <td class="num"><?= $lid['vacante'] ?></td>
                     <td class="num"><?= $lid['total'] ?></td>
@@ -353,7 +349,7 @@ foreach ($directores as $dir) {
 
                 <!-- TOTAL DIRECTOR -->
                 <tr class="row-total dir-<?= $di ?>">
-                    <td colspan="3" style="padding-left:28px;">Total <?= htmlspecialchars($dir['nombre']) ?></td>
+                    <td colspan="4" style="padding-left:28px;">Total <?= htmlspecialchars($dir['nombre']) ?></td>
                     <td class="num"><?= $dir['activo'] ?></td>
                     <td class="num"><?= $dir['vacante'] ?></td>
                     <td class="num"><?= $dir['total'] ?></td>
@@ -375,8 +371,18 @@ function toggleDir(di) {
 }
 
 function toggleLid(di, li) {
+    event.stopPropagation();
     const rows = document.querySelectorAll('.lid-' + di + '-' + li);
     const icon = document.getElementById('icon-lid-' + di + '-' + li);
+    const hidden = rows[0]?.style.display === 'none';
+    rows.forEach(r => r.style.display = hidden ? '' : 'none');
+    icon.textContent = hidden ? '▼' : '▶';
+}
+
+function toggleCoach(di, li, ci) {
+    event.stopPropagation();
+    const rows = document.querySelectorAll('.coach-' + di + '-' + li + '-' + ci);
+    const icon = document.getElementById('icon-coach-' + di + '-' + li + '-' + ci);
     const hidden = rows[0]?.style.display === 'none';
     rows.forEach(r => r.style.display = hidden ? '' : 'none');
     icon.textContent = hidden ? '▼' : '▶';
