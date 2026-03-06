@@ -372,8 +372,8 @@ $roles_labels = [
         <div class="kpi-card full">
             <div class="kpi-header">
                 <div class="kpi-icon kpi-purple">👥</div>
-                <!-- se cambio el $semana_display(semana + 1) por $semana_base -->
-                <div class="kpi-label">Headcount — Semana <?= $semana_base ?> · <?= $anio_display ?></div>
+                <!-- se cambio el $semana_display(semana + 1) por $semana_base tambien el $anio_display($anio_base + 1) por $anio_actual-->
+                <div class="kpi-label">Headcount — Semana <?= $semana_base ?> · <?= $anio_actual ?></div>
             </div>
             <div class="kpi-numbers">
                 <div class="kpi-num">

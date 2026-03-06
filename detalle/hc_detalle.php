@@ -255,7 +255,8 @@ foreach ($directores as $dir) {
 
 <main class="main">
     <div class="page-header">
-        <h2>Headcount Comercial <span class="semana-badge">Semana <?= $semana_display ?> · <?= $anio_actual ?></span></h2>
+         <!-- se cambio el $semana_display(semana + 1) por $semana_base -->
+        <h2>Headcount Comercial <span class="semana-badge">Semana <?= $semana_base ?> · <?= $anio_actual ?></span></h2>
         <p><?= date('d \d\e F Y') ?> · <?= htmlspecialchars($roles_labels[$rol] ?? $rol) ?></p>
     </div>
 
