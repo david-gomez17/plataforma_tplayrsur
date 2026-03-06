@@ -24,58 +24,49 @@ if ($res_sem && $row_sem = mysqli_fetch_assoc($res_sem)) {
     $anio_actual   = (int)$row_sem['anio'];
 }
 
-// Solo coaches pueden capturar
 $puede_capturar = ($rol === 'coach' || $rol === 'admin');
 
 // ── GUARDAR REAI ─────────────────────────────────────────────────────────────
-$mensaje = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puede_capturar && isset($_POST['action']) && $_POST['action'] === 'guardar') {
-    $talento_vendedor  = mysqli_real_escape_string($conexion, $_POST['numero_talento_gs'] ?? '');
-    $nombre_vendedor   = mysqli_real_escape_string($conexion, $_POST['nombre_colaborador'] ?? '');
-    $asunto            = $_POST['asunto'] ?? '';
-    $fecha             = $_POST['fecha'] ?? '';
-    $descripcion       = mysqli_real_escape_string($conexion, $_POST['descripcion'] ?? '');
-    $evidencia_nombre  = '';
+    $talento_vendedor = mysqli_real_escape_string($conexion, $_POST['numero_talento_gs'] ?? '');
+    $nombre_vendedor  = mysqli_real_escape_string($conexion, $_POST['nombre_colaborador'] ?? '');
+    $asunto           = $_POST['asunto'] ?? '';
+    $fecha            = $_POST['fecha'] ?? '';
+    $descripcion      = mysqli_real_escape_string($conexion, $_POST['descripcion'] ?? '');
+    $evidencia_nombre = '';
+    $asuntos_validos  = ['Retroalimentación','ECNUs','Acta Administrativa','Incidencia'];
 
-    $asuntos_validos = ['Retroalimentación','ECNUs','Acta Administrativa','Incidencia'];
     if (!in_array($asunto, $asuntos_validos)) {
-        $mensaje = 'error:Asunto no válido';
-    } else {
-        // Subir evidencia
-        if (!empty($_FILES['evidencia']['name'])) {
-            $ext     = pathinfo($_FILES['evidencia']['name'], PATHINFO_EXTENSION);
-            $allowed = ['jpg','jpeg','png','pdf','doc','docx'];
-            if (in_array(strtolower($ext), $allowed)) {
-                $upload_dir = '../uploads/reai/';
-                if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-                $nombre_archivo = time() . '_' . preg_replace('/[^a-zA-Z0-9._]/', '_', $_FILES['evidencia']['name']);
-                if (move_uploaded_file($_FILES['evidencia']['tmp_name'], $upload_dir . $nombre_archivo)) {
-                    $evidencia_nombre = $nombre_archivo;
-                }
-            } else {
-                $mensaje = 'error:Formato de archivo no permitido';
-            }
-        }
+        echo json_encode(['status'=>'error','msg'=>'Asunto no válido']); exit();
+    }
 
-        if (strpos($mensaje, 'error') === false) {
-            $asunto_esc = mysqli_real_escape_string($conexion, $asunto);
-            $sql = "INSERT INTO reai (numero_talento_gs, nombre_colaborador, asunto, fecha, descripcion, evidencia, capturado_por, talento_gs_coach, id_posicion_coach)
-                    VALUES ('$talento_vendedor','$nombre_vendedor','$asunto_esc','$fecha','$descripcion','$evidencia_nombre','$talento_gs_coach','$talento_gs_coach','$id_posicion')";
-            if (mysqli_query($conexion, $sql)) {
-                $mensaje = 'ok:Registro guardado correctamente';
-            } else {
-                $mensaje = 'error:Error al guardar: ' . mysqli_error($conexion);
+    if (!empty($_FILES['evidencia']['name'])) {
+        $ext     = pathinfo($_FILES['evidencia']['name'], PATHINFO_EXTENSION);
+        $allowed = ['jpg','jpeg','png','pdf','doc','docx'];
+        if (in_array(strtolower($ext), $allowed)) {
+            $upload_dir = '../uploads/reai/';
+            if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
+            $nombre_archivo = time() . '_' . preg_replace('/[^a-zA-Z0-9._]/', '_', $_FILES['evidencia']['name']);
+            if (move_uploaded_file($_FILES['evidencia']['tmp_name'], $upload_dir . $nombre_archivo)) {
+                $evidencia_nombre = $nombre_archivo;
             }
+        } else {
+            echo json_encode(['status'=>'error','msg'=>'Formato no permitido']); exit();
         }
     }
-    // Respuesta AJAX
-    header('Content-Type: application/json');
-    $parts = explode(':', $mensaje, 2);
-    echo json_encode(['status' => $parts[0], 'msg' => $parts[1] ?? '']);
+
+    $asunto_esc = mysqli_real_escape_string($conexion, $asunto);
+    $sql = "INSERT INTO reai (numero_talento_gs, nombre_colaborador, asunto, fecha, descripcion, evidencia, capturado_por, talento_gs_coach, id_posicion_coach)
+            VALUES ('$talento_vendedor','$nombre_vendedor','$asunto_esc','$fecha','$descripcion','$evidencia_nombre','$talento_gs_coach','$talento_gs_coach','$id_posicion')";
+    if (mysqli_query($conexion, $sql)) {
+        echo json_encode(['status'=>'ok','msg'=>'Registro guardado correctamente']);
+    } else {
+        echo json_encode(['status'=>'error','msg'=>'Error: '.mysqli_error($conexion)]);
+    }
     exit();
 }
 
-// ── OBTENER HISTORIAL REAI (AJAX) ────────────────────────────────────────────
+// ── HISTORIAL AJAX ────────────────────────────────────────────────────────────
 if (isset($_GET['action']) && $_GET['action'] === 'historial') {
     $talento = mysqli_real_escape_string($conexion, $_GET['talento_gs'] ?? '');
     $res = mysqli_query($conexion, "SELECT * FROM reai WHERE numero_talento_gs = '$talento' ORDER BY fecha DESC, created_at DESC");
@@ -86,18 +77,36 @@ if (isset($_GET['action']) && $_GET['action'] === 'historial') {
     exit();
 }
 
-// ── OBTENER VENDEDORES DEL COACH ─────────────────────────────────────────────
+// ── OBTENER VENDEDORES CON NOMBRE DE COACH ────────────────────────────────────
 $vendedores = [];
 if ($semana_actual && $anio_actual) {
-    $sql_vend = "SELECT v.nombre_colaborador, v.numero_talento_gs, v.fecha_alta,
-                 TIMESTAMPDIFF(MONTH, v.fecha_alta, CURDATE()) as antiguedad
-                 FROM hc v
-                 WHERE v.posicion_lr = ? AND v.posicion IN ($puestos_in)
-                 AND v.semana = ? AND v.anio = ?
-                 AND v.numero_talento_gs NOT LIKE '%VACANTE%'
-                 ORDER BY v.nombre_colaborador";
-    $stmt = mysqli_prepare($conexion, $sql_vend);
-    mysqli_stmt_bind_param($stmt, "sii", $id_posicion, $semana_actual, $anio_actual);
+    if ($rol === 'coach') {
+        // Solo los vendedores del coach logueado
+        $sql_vend = "SELECT v.nombre_colaborador, v.numero_talento_gs, v.fecha_alta,
+                     TIMESTAMPDIFF(MONTH, v.fecha_alta, CURDATE()) as antiguedad,
+                     c.nombre_colaborador as nombre_coach, c.numero_talento_gs as talento_coach
+                     FROM hc v
+                     INNER JOIN hc c ON v.posicion_lr = c.id_posicion AND c.semana = v.semana AND c.anio = v.anio
+                     WHERE v.posicion_lr = ? AND v.posicion IN ($puestos_in)
+                     AND v.semana = ? AND v.anio = ?
+                     AND v.numero_talento_gs NOT LIKE '%VACANTE%'
+                     ORDER BY v.nombre_colaborador";
+        $stmt = mysqli_prepare($conexion, $sql_vend);
+        mysqli_stmt_bind_param($stmt, "sii", $id_posicion, $semana_actual, $anio_actual);
+    } else {
+        // Admin/lider/director: todos los vendedores con su coach
+        $sql_vend = "SELECT v.nombre_colaborador, v.numero_talento_gs, v.fecha_alta,
+                     TIMESTAMPDIFF(MONTH, v.fecha_alta, CURDATE()) as antiguedad,
+                     c.nombre_colaborador as nombre_coach, c.numero_talento_gs as talento_coach
+                     FROM hc v
+                     INNER JOIN hc c ON v.posicion_lr = c.id_posicion AND c.semana = v.semana AND c.anio = v.anio
+                     WHERE v.posicion IN ($puestos_in)
+                     AND v.semana = ? AND v.anio = ?
+                     AND v.numero_talento_gs NOT LIKE '%VACANTE%'
+                     ORDER BY c.nombre_colaborador, v.nombre_colaborador";
+        $stmt = mysqli_prepare($conexion, $sql_vend);
+        mysqli_stmt_bind_param($stmt, "ii", $semana_actual, $anio_actual);
+    }
     mysqli_stmt_execute($stmt);
     $res_vend = mysqli_stmt_get_result($stmt);
     while ($row = mysqli_fetch_assoc($res_vend)) $vendedores[] = $row;
@@ -152,13 +161,18 @@ if (!empty($vendedores)) {
         .logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
         .main { margin-left: var(--sidebar); flex: 1; padding: 32px; }
-        .page-header { margin-bottom: 24px; }
+        .page-header { margin-bottom: 20px; }
         .page-header h2 { font-size: 1.5rem; font-weight: 700; }
         .page-header p { font-size: 0.82rem; color: var(--text2); margin-top: 2px; }
 
+        /* BUSCADOR */
+        .search-bar { margin-bottom: 16px; }
+        .search-input { width: 100%; max-width: 380px; padding: 10px 16px 10px 40px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem; background: var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236b7a99' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.156a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E") no-repeat 12px center; outline: none; }
+        .search-input:focus { border-color: var(--blue); }
+
         /* TABLA */
         .table-card { background: var(--white); border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); overflow: hidden; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
         thead th { background: var(--blue); color: white; padding: 12px 16px; text-align: left; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; }
         thead th.center { text-align: center; }
         tbody tr { border-bottom: 1px solid var(--border); }
@@ -166,31 +180,26 @@ if (!empty($vendedores)) {
         tbody tr:hover td { background: #f8faff; }
         td { padding: 11px 16px; vertical-align: middle; }
         td.center { text-align: center; }
-
-        .antiguedad { font-size: 0.75rem; color: var(--text2); }
+        .sub-text { font-size: 0.72rem; color: var(--text2); margin-top: 2px; }
 
         /* BADGES REAI */
-        .reai-badge { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.15s; border: none; }
+        .reai-badge { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.15s; border: none; }
         .reai-badge.has-data { background: #e8f0fe; color: var(--blue); }
-        .reai-badge.no-data  { background: #f4f6fb; color: #d1d5db; }
+        .reai-badge.no-data  { background: #f4f6fb; color: #d1d5db; cursor: default; }
         .reai-badge.can-add  { background: #f0fdf4; color: #059669; }
-        .reai-badge:hover    { transform: scale(1.15); }
+        .reai-badge:hover:not(.no-data) { transform: scale(1.15); }
 
         /* MODAL */
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center; }
         .modal-overlay.open { display: flex; }
         .modal { background: white; border-radius: 16px; padding: 28px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .modal-title { font-size: 1rem; font-weight: 700; }
-        .modal-close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text2); line-height: 1; }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+        .modal-title { font-size: 1rem; font-weight: 700; line-height: 1.3; }
+        .modal-close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text2); line-height: 1; flex-shrink: 0; margin-left: 12px; }
 
-        /* FORM */
         .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-        .form-group select, .form-group input, .form-group textarea {
-            width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
-            font-size: 0.9rem; font-family: inherit; outline: none; transition: border 0.2s;
-        }
+        .form-group label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .form-group select, .form-group input, .form-group textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; font-family: inherit; outline: none; transition: border 0.2s; }
         .form-group select:focus, .form-group input:focus, .form-group textarea:focus { border-color: var(--blue); }
         .form-group textarea { resize: vertical; min-height: 80px; }
 
@@ -198,25 +207,28 @@ if (!empty($vendedores)) {
         .btn-primary:hover { background: #1d4ed8; }
         .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
 
-        /* HISTORIAL */
         .historial-item { border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
         .historial-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .historial-asunto { font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
-        .asunto-r  { background: #dbeafe; color: #1d4ed8; }
-        .asunto-e  { background: #fef3c7; color: #92400e; }
-        .asunto-a  { background: #fee2e2; color: #991b1b; }
-        .asunto-i  { background: #f3e8ff; color: #6b21a8; }
+        .historial-asunto { font-size: 0.78rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+        .asunto-r { background: #dbeafe; color: #1d4ed8; }
+        .asunto-e { background: #fef3c7; color: #92400e; }
+        .asunto-a { background: #fee2e2; color: #991b1b; }
+        .asunto-i { background: #f3e8ff; color: #6b21a8; }
         .historial-fecha { font-size: 0.75rem; color: var(--text2); }
         .historial-desc { font-size: 0.82rem; color: var(--text); margin-top: 6px; }
         .historial-evidencia { margin-top: 8px; }
         .historial-evidencia a { font-size: 0.78rem; color: var(--blue); text-decoration: none; font-weight: 600; }
 
-        .toast { position: fixed; bottom: 24px; right: 24px; background: #1a2540; color: white; padding: 12px 20px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; z-index: 9999; display: none; }
+        .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+        .section-label { font-size: 0.78rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; font-weight: 700; }
+
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; z-index: 9999; display: none; color: white; }
         .toast.show { display: block; }
         .toast.success { background: #065f46; }
         .toast.error   { background: #991b1b; }
 
-        .empty-state { text-align: center; padding: 40px; color: var(--text2); font-size: 0.88rem; }
+        .empty-state { text-align: center; padding: 48px; color: var(--text2); font-size: 0.88rem; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -237,7 +249,7 @@ if (!empty($vendedores)) {
 <main class="main">
     <div class="page-header">
         <h2>REAI — Seguimiento de Colaboradores</h2>
-        <p><?= date('d \d\e F Y') ?> · 
+        <p><?= date('d \d\e F Y') ?> ·
         <?php if ($puede_capturar): ?>
             <span style="color:#059669;font-weight:700;">✓ Puedes capturar registros</span>
         <?php else: ?>
@@ -247,15 +259,19 @@ if (!empty($vendedores)) {
     </div>
 
     <?php if (empty($vendedores)): ?>
-        <div class="table-card">
-            <div class="empty-state">No se encontraron colaboradores asignados a tu equipo.</div>
-        </div>
+        <div class="table-card"><div class="empty-state">No se encontraron colaboradores asignados.</div></div>
     <?php else: ?>
+
+    <div class="search-bar">
+        <input type="text" class="search-input" id="buscador" placeholder="Buscar colaborador..." oninput="filtrarTabla()">
+    </div>
+
     <div class="table-card">
         <table>
             <thead>
                 <tr>
                     <th>Colaborador</th>
+                    <th>Coach</th>
                     <th class="center">Antigüedad</th>
                     <th class="center">R</th>
                     <th class="center">E</th>
@@ -263,90 +279,58 @@ if (!empty($vendedores)) {
                     <th class="center">I</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="tablaBody">
             <?php foreach ($vendedores as $vend):
-                $tgs     = $vend['numero_talento_gs'];
-                $nombre  = $vend['nombre_colaborador'];
-                $antig   = $vend['antiguedad'] ?? 0;
-                $counts  = $reai_counts[$tgs] ?? [];
-                $cnt_r   = $counts['Retroalimentación'] ?? 0;
-                $cnt_e   = $counts['ECNUs'] ?? 0;
-                $cnt_a   = $counts['Acta Administrativa'] ?? 0;
-                $cnt_i   = $counts['Incidencia'] ?? 0;
+                $tgs        = $vend['numero_talento_gs'];
+                $nombre     = $vend['nombre_colaborador'];
+                $antig      = $vend['antiguedad'] ?? 0;
+                $coach_nom  = $vend['nombre_coach'] ?? '—';
+                $counts     = $reai_counts[$tgs] ?? [];
+                $cnt_r      = $counts['Retroalimentación'] ?? 0;
+                $cnt_e      = $counts['ECNUs'] ?? 0;
+                $cnt_a      = $counts['Acta Administrativa'] ?? 0;
+                $cnt_i      = $counts['Incidencia'] ?? 0;
             ?>
-            <tr>
+            <tr data-nombre="<?= strtolower(htmlspecialchars($nombre)) ?>" data-coach="<?= strtolower(htmlspecialchars($coach_nom)) ?>">
                 <td>
                     <div style="font-weight:600;"><?= htmlspecialchars($nombre) ?></div>
-                    <div class="antiguedad"><?= $tgs ?></div>
+                    <div class="sub-text"><?= $tgs ?></div>
+                </td>
+                <td>
+                    <div style="font-size:0.82rem;"><?= htmlspecialchars($coach_nom) ?></div>
                 </td>
                 <td class="center">
                     <span style="font-weight:700;"><?= $antig ?></span>
-                    <span class="antiguedad"> m</span>
+                    <span class="sub-text"> m</span>
                 </td>
-                <!-- R -->
+                <?php
+                $asuntos = [
+                    'R' => ['Retroalimentación', $cnt_r],
+                    'E' => ['ECNUs', $cnt_e],
+                    'A' => ['Acta Administrativa', $cnt_a],
+                    'I' => ['Incidencia', $cnt_i],
+                ];
+                foreach ($asuntos as $letra => [$asunto_val, $cnt]):
+                    $tgs_js    = addslashes($tgs);
+                    $nombre_js = addslashes($nombre);
+                    $asunto_js = addslashes($asunto_val);
+                ?>
                 <td class="center">
                     <?php if ($puede_capturar): ?>
-                        <button class="reai-badge <?= $cnt_r > 0 ? 'has-data' : 'can-add' ?>"
-                            onclick="abrirModal('<?= htmlspecialchars($tgs) ?>','<?= htmlspecialchars(addslashes($nombre)) ?>','Retroalimentación')"
-                            title="<?= $cnt_r > 0 ? "Ver/Agregar Retroalimentación ($cnt_r)" : 'Agregar Retroalimentación' ?>">
-                            <?= $cnt_r > 0 ? $cnt_r : '+' ?>
+                        <button class="reai-badge <?= $cnt > 0 ? 'has-data' : 'can-add' ?>"
+                            onclick="abrirModal('<?= $tgs_js ?>','<?= $nombre_js ?>','<?= $asunto_js ?>')"
+                            title="<?= $cnt > 0 ? "$asunto_val ($cnt)" : "Agregar $asunto_val" ?>">
+                            <?= $cnt > 0 ? $cnt : '+' ?>
                         </button>
                     <?php else: ?>
-                        <button class="reai-badge <?= $cnt_r > 0 ? 'has-data' : 'no-data' ?>"
-                            onclick="<?= $cnt_r > 0 ? "verHistorial('$tgs','$nombre','Retroalimentación')" : '' ?>"
-                            title="<?= $cnt_r > 0 ? "Ver Retroalimentación ($cnt_r)" : 'Sin registros' ?>">
-                            <?= $cnt_r > 0 ? $cnt_r : '—' ?>
+                        <button class="reai-badge <?= $cnt > 0 ? 'has-data' : 'no-data' ?>"
+                            <?= $cnt > 0 ? "onclick=\"abrirModal('$tgs_js','$nombre_js','$asunto_js')\"" : '' ?>
+                            title="<?= $cnt > 0 ? "$asunto_val ($cnt)" : 'Sin registros' ?>">
+                            <?= $cnt > 0 ? $cnt : '—' ?>
                         </button>
                     <?php endif; ?>
                 </td>
-                <!-- E -->
-                <td class="center">
-                    <?php if ($puede_capturar): ?>
-                        <button class="reai-badge <?= $cnt_e > 0 ? 'has-data' : 'can-add' ?>"
-                            onclick="abrirModal('<?= htmlspecialchars($tgs) ?>','<?= htmlspecialchars(addslashes($nombre)) ?>','ECNUs')"
-                            title="<?= $cnt_e > 0 ? "Ver/Agregar ECNUs ($cnt_e)" : 'Agregar ECNU' ?>">
-                            <?= $cnt_e > 0 ? $cnt_e : '+' ?>
-                        </button>
-                    <?php else: ?>
-                        <button class="reai-badge <?= $cnt_e > 0 ? 'has-data' : 'no-data' ?>"
-                            onclick="<?= $cnt_e > 0 ? "verHistorial('$tgs','$nombre','ECNUs')" : '' ?>"
-                            title="<?= $cnt_e > 0 ? "Ver ECNUs ($cnt_e)" : 'Sin registros' ?>">
-                            <?= $cnt_e > 0 ? $cnt_e : '—' ?>
-                        </button>
-                    <?php endif; ?>
-                </td>
-                <!-- A -->
-                <td class="center">
-                    <?php if ($puede_capturar): ?>
-                        <button class="reai-badge <?= $cnt_a > 0 ? 'has-data' : 'can-add' ?>"
-                            onclick="abrirModal('<?= htmlspecialchars($tgs) ?>','<?= htmlspecialchars(addslashes($nombre)) ?>','Acta Administrativa')"
-                            title="<?= $cnt_a > 0 ? "Ver/Agregar Acta ($cnt_a)" : 'Agregar Acta' ?>">
-                            <?= $cnt_a > 0 ? $cnt_a : '+' ?>
-                        </button>
-                    <?php else: ?>
-                        <button class="reai-badge <?= $cnt_a > 0 ? 'has-data' : 'no-data' ?>"
-                            onclick="<?= $cnt_a > 0 ? "verHistorial('$tgs','$nombre','Acta Administrativa')" : '' ?>"
-                            title="<?= $cnt_a > 0 ? "Ver Actas ($cnt_a)" : 'Sin registros' ?>">
-                            <?= $cnt_a > 0 ? $cnt_a : '—' ?>
-                        </button>
-                    <?php endif; ?>
-                </td>
-                <!-- I -->
-                <td class="center">
-                    <?php if ($puede_capturar): ?>
-                        <button class="reai-badge <?= $cnt_i > 0 ? 'has-data' : 'can-add' ?>"
-                            onclick="abrirModal('<?= htmlspecialchars($tgs) ?>','<?= htmlspecialchars(addslashes($nombre)) ?>','Incidencia')"
-                            title="<?= $cnt_i > 0 ? "Ver/Agregar Incidencia ($cnt_i)" : 'Agregar Incidencia' ?>">
-                            <?= $cnt_i > 0 ? $cnt_i : '+' ?>
-                        </button>
-                    <?php else: ?>
-                        <button class="reai-badge <?= $cnt_i > 0 ? 'has-data' : 'no-data' ?>"
-                            onclick="<?= $cnt_i > 0 ? "verHistorial('$tgs','$nombre','Incidencia')" : '' ?>"
-                            title="<?= $cnt_i > 0 ? "Ver Incidencias ($cnt_i)" : 'Sin registros' ?>">
-                            <?= $cnt_i > 0 ? $cnt_i : '—' ?>
-                        </button>
-                    <?php endif; ?>
-                </td>
+                <?php endforeach; ?>
             </tr>
             <?php endforeach; ?>
             </tbody>
@@ -355,43 +339,47 @@ if (!empty($vendedores)) {
     <?php endif; ?>
 </main>
 
-<!-- MODAL CAPTURA / HISTORIAL -->
+<!-- MODAL -->
 <div class="modal-overlay" id="modalOverlay" onclick="cerrarModal(event)">
     <div class="modal">
         <div class="modal-header">
-            <div class="modal-title" id="modalTitle">REAI</div>
+            <div class="modal-title" id="modalTitle"></div>
             <button class="modal-close" onclick="cerrarModalBtn()">×</button>
         </div>
         <div id="modalBody"></div>
     </div>
 </div>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <script>
-let currentTalento = '';
-let currentNombre  = '';
-let currentAsunto  = '';
+let currentTalento = '', currentNombre = '', currentAsunto = '';
+const puedeCapturar = <?= $puede_capturar ? 'true' : 'false' ?>;
 
 const asuntoColors = {
-    'Retroalimentación': 'asunto-r',
-    'ECNUs':             'asunto-e',
-    'Acta Administrativa': 'asunto-a',
-    'Incidencia':        'asunto-i',
+    'Retroalimentación':  'asunto-r',
+    'ECNUs':              'asunto-e',
+    'Acta Administrativa':'asunto-a',
+    'Incidencia':         'asunto-i',
 };
+
+function filtrarTabla() {
+    const q = document.getElementById('buscador').value.toLowerCase();
+    document.querySelectorAll('#tablaBody tr').forEach(tr => {
+        const nombre = tr.dataset.nombre || '';
+        const coach  = tr.dataset.coach  || '';
+        tr.classList.toggle('hidden', !nombre.includes(q) && !coach.includes(q));
+    });
+}
 
 function abrirModal(talento, nombre, asunto) {
     currentTalento = talento;
     currentNombre  = nombre;
     currentAsunto  = asunto;
-
     document.getElementById('modalTitle').textContent = nombre + ' — ' + asunto;
     document.getElementById('modalOverlay').classList.add('open');
+    document.getElementById('modalBody').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text2);">Cargando...</div>';
 
-    const puedeCapturar = <?= $puede_capturar ? 'true' : 'false' ?>;
-
-    // Cargar historial + formulario
     fetch('reai.php?action=historial&talento_gs=' + encodeURIComponent(talento))
         .then(r => r.json())
         .then(data => {
@@ -399,11 +387,11 @@ function abrirModal(talento, nombre, asunto) {
             let html = '';
 
             if (filtrados.length > 0) {
-                html += '<h4 style="font-size:0.8rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Historial (' + filtrados.length + ')</h4>';
+                html += `<div class="section-label">Historial (${filtrados.length})</div>`;
                 filtrados.forEach(r => {
                     html += `<div class="historial-item">
                         <div class="historial-header">
-                            <span class="historial-asunto ${asuntoColors[r.asunto] || ''}">${r.asunto}</span>
+                            <span class="historial-asunto ${asuntoColors[r.asunto]||''}">${r.asunto}</span>
                             <span class="historial-fecha">${r.fecha}</span>
                         </div>
                         <div class="historial-desc">${r.descripcion || '—'}</div>
@@ -416,9 +404,8 @@ function abrirModal(talento, nombre, asunto) {
 
             if (puedeCapturar) {
                 const hoy = new Date().toISOString().split('T')[0];
-                html += `
-                <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;">
-                <h4 style="font-size:0.8rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;">Nuevo registro</h4>
+                html += `<hr class="divider">
+                <div class="section-label">Nuevo registro</div>
                 <div class="form-group">
                     <label>Asunto</label>
                     <select id="f_asunto">
@@ -447,26 +434,20 @@ function abrirModal(talento, nombre, asunto) {
         });
 }
 
-function verHistorial(talento, nombre, asunto) {
-    abrirModal(talento, nombre, asunto);
-}
-
 function guardarReai() {
     const btn = document.getElementById('btnGuardar');
-    btn.disabled = true;
-    btn.textContent = 'Guardando...';
-
-    const formData = new FormData();
-    formData.append('action', 'guardar');
-    formData.append('numero_talento_gs', currentTalento);
-    formData.append('nombre_colaborador', currentNombre);
-    formData.append('asunto', document.getElementById('f_asunto').value);
-    formData.append('fecha', document.getElementById('f_fecha').value);
-    formData.append('descripcion', document.getElementById('f_descripcion').value);
+    btn.disabled = true; btn.textContent = 'Guardando...';
+    const fd = new FormData();
+    fd.append('action', 'guardar');
+    fd.append('numero_talento_gs', currentTalento);
+    fd.append('nombre_colaborador', currentNombre);
+    fd.append('asunto', document.getElementById('f_asunto').value);
+    fd.append('fecha', document.getElementById('f_fecha').value);
+    fd.append('descripcion', document.getElementById('f_descripcion').value);
     const ev = document.getElementById('f_evidencia');
-    if (ev.files[0]) formData.append('evidencia', ev.files[0]);
+    if (ev.files[0]) fd.append('evidencia', ev.files[0]);
 
-    fetch('reai.php', { method: 'POST', body: formData })
+    fetch('reai.php', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
             if (data.status === 'ok') {
@@ -475,20 +456,13 @@ function guardarReai() {
                 setTimeout(() => location.reload(), 800);
             } else {
                 mostrarToast(data.msg, 'error');
-                btn.disabled = false;
-                btn.textContent = 'Guardar registro';
+                btn.disabled = false; btn.textContent = 'Guardar registro';
             }
         })
-        .catch(() => {
-            mostrarToast('Error de conexión', 'error');
-            btn.disabled = false;
-            btn.textContent = 'Guardar registro';
-        });
+        .catch(() => { mostrarToast('Error de conexión', 'error'); btn.disabled = false; btn.textContent = 'Guardar registro'; });
 }
 
-function cerrarModal(e) {
-    if (e.target === document.getElementById('modalOverlay')) cerrarModalBtn();
-}
+function cerrarModal(e) { if (e.target.id === 'modalOverlay') cerrarModalBtn(); }
 function cerrarModalBtn() {
     document.getElementById('modalOverlay').classList.remove('open');
     document.getElementById('modalBody').innerHTML = '';
@@ -496,8 +470,7 @@ function cerrarModalBtn() {
 
 function mostrarToast(msg, tipo) {
     const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast show ' + tipo;
+    t.textContent = msg; t.className = 'toast show ' + tipo;
     setTimeout(() => t.className = 'toast', 3000);
 }
 </script>
