@@ -319,8 +319,8 @@ $roles_labels = [
     <a href="import/import_ventas.php" class="nav-item">
         <span class="nav-icon">📈</span> Ventas
     </a>
-    <a href="import/import_hc.php" class="nav-item">
-        <span class="nav-icon">👥</span> Headcount
+    <a href="detalle/hc_detalle.php" class="nav-item">
+    <span class="nav-icon">👥</span> Headcount
     </a>
     <div class="sidebar-bottom">
         <a href="logout.php" class="logout-btn">⎋ Cerrar sesión</a>
