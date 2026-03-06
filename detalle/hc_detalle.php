@@ -248,7 +248,7 @@ foreach ($directores as $dir) {
     <a href="../import/import_instalaciones.php" class="nav-item"><span class="nav-icon">🔧</span> Instalaciones</a>
     <a href="../import/import_ventas.php" class="nav-item"><span class="nav-icon">📈</span> Ventas</a>
     <a href="hc_detalle.php" class="nav-item active"><span class="nav-icon">👥</span> Headcount</a>
-    <a href="reai.php" class="nav-item active"><span class="nav-icon">📋</span> REAI</a>
+    <a href="reai.php" class="nav-item"><span class="nav-icon">📋</span> REAI</a>
     <div class="sidebar-bottom">
         <a href="../logout.php" class="logout-btn">⎋ Cerrar sesión</a>
     </div>
