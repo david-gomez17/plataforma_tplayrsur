@@ -16,7 +16,6 @@ $talento_gs_coach = $_SESSION['numero_talento_gs'] ?? '';
 $puestos_comerciales = ['PROMOVENDEDOR PUNTO DE VENTA','VENDEDOR','VENDEDOR NEGOCIOS','VENDEDOR NEGOCIO'];
 $puestos_in = "'" . implode("','", $puestos_comerciales) . "'";
 
-// Semana y año más recientes
 $semana_actual = null; $anio_actual = null;
 $res_sem = mysqli_query($conexion, "SELECT semana, anio FROM hc ORDER BY anio DESC, semana DESC LIMIT 1");
 if ($res_sem && $row_sem = mysqli_fetch_assoc($res_sem)) {
@@ -24,7 +23,7 @@ if ($res_sem && $row_sem = mysqli_fetch_assoc($res_sem)) {
     $anio_actual   = (int)$row_sem['anio'];
 }
 
-$puede_capturar = ($rol === 'coach' || $rol === 'admin');
+$puede_capturar = ($rol === 'coach');
 
 // ── GUARDAR REAI ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puede_capturar && isset($_POST['action']) && $_POST['action'] === 'guardar') {
@@ -77,11 +76,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'historial') {
     exit();
 }
 
-// ── OBTENER VENDEDORES CON NOMBRE DE COACH ────────────────────────────────────
+// ── OBTENER VENDEDORES SEGÚN JERARQUÍA ────────────────────────────────────────
 $vendedores = [];
 if ($semana_actual && $anio_actual) {
+
     if ($rol === 'coach') {
-        // Solo los vendedores del coach logueado
+        // Sus vendedores directos
         $sql_vend = "SELECT v.nombre_colaborador, v.numero_talento_gs, v.fecha_alta,
                      TIMESTAMPDIFF(MONTH, v.fecha_alta, CURDATE()) as antiguedad,
                      c.nombre_colaborador as nombre_coach, c.numero_talento_gs as talento_coach
@@ -93,8 +93,38 @@ if ($semana_actual && $anio_actual) {
                      ORDER BY v.nombre_colaborador";
         $stmt = mysqli_prepare($conexion, $sql_vend);
         mysqli_stmt_bind_param($stmt, "sii", $id_posicion, $semana_actual, $anio_actual);
-    } else {
-        // Admin/lider/director: todos los vendedores con su coach
+
+    } elseif ($rol === 'lider') {
+        // Vendedores de todos sus coaches
+        $sql_vend = "SELECT v.nombre_colaborador, v.numero_talento_gs, v.fecha_alta,
+                     TIMESTAMPDIFF(MONTH, v.fecha_alta, CURDATE()) as antiguedad,
+                     c.nombre_colaborador as nombre_coach, c.numero_talento_gs as talento_coach
+                     FROM hc v
+                     INNER JOIN hc c ON v.posicion_lr = c.id_posicion AND c.semana = v.semana AND c.anio = v.anio
+                     WHERE c.posicion_lr = ? AND v.posicion IN ($puestos_in)
+                     AND v.semana = ? AND v.anio = ?
+                     AND v.numero_talento_gs NOT LIKE '%VACANTE%'
+                     ORDER BY c.nombre_colaborador, v.nombre_colaborador";
+        $stmt = mysqli_prepare($conexion, $sql_vend);
+        mysqli_stmt_bind_param($stmt, "sii", $id_posicion, $semana_actual, $anio_actual);
+
+    } elseif ($rol === 'director_distrital') {
+        // Vendedores de todos sus líderes → coaches → vendedores
+        $sql_vend = "SELECT v.nombre_colaborador, v.numero_talento_gs, v.fecha_alta,
+                     TIMESTAMPDIFF(MONTH, v.fecha_alta, CURDATE()) as antiguedad,
+                     c.nombre_colaborador as nombre_coach, c.numero_talento_gs as talento_coach
+                     FROM hc v
+                     INNER JOIN hc c ON v.posicion_lr = c.id_posicion AND c.semana = v.semana AND c.anio = v.anio
+                     INNER JOIN hc l ON c.posicion_lr = l.id_posicion AND l.semana = v.semana AND l.anio = v.anio
+                     WHERE l.posicion_lr = ? AND v.posicion IN ($puestos_in)
+                     AND v.semana = ? AND v.anio = ?
+                     AND v.numero_talento_gs NOT LIKE '%VACANTE%'
+                     ORDER BY l.nombre_colaborador, c.nombre_colaborador, v.nombre_colaborador";
+        $stmt = mysqli_prepare($conexion, $sql_vend);
+        mysqli_stmt_bind_param($stmt, "sii", $id_posicion, $semana_actual, $anio_actual);
+
+    } elseif ($rol === 'director_regional' || $rol === 'admin') {
+        // Todos
         $sql_vend = "SELECT v.nombre_colaborador, v.numero_talento_gs, v.fecha_alta,
                      TIMESTAMPDIFF(MONTH, v.fecha_alta, CURDATE()) as antiguedad,
                      c.nombre_colaborador as nombre_coach, c.numero_talento_gs as talento_coach
@@ -107,10 +137,13 @@ if ($semana_actual && $anio_actual) {
         $stmt = mysqli_prepare($conexion, $sql_vend);
         mysqli_stmt_bind_param($stmt, "ii", $semana_actual, $anio_actual);
     }
-    mysqli_stmt_execute($stmt);
-    $res_vend = mysqli_stmt_get_result($stmt);
-    while ($row = mysqli_fetch_assoc($res_vend)) $vendedores[] = $row;
-    mysqli_stmt_close($stmt);
+
+    if (isset($stmt)) {
+        mysqli_stmt_execute($stmt);
+        $res_vend = mysqli_stmt_get_result($stmt);
+        while ($row = mysqli_fetch_assoc($res_vend)) $vendedores[] = $row;
+        mysqli_stmt_close($stmt);
+    }
 }
 
 // Contar REAIs por vendedor y asunto
@@ -143,8 +176,6 @@ if (!empty($vendedores)) {
             --text:   #1a2540;
             --text2:  #6b7a99;
             --border: #e2e8f4;
-            --green:  #10b981;
-            --red:    #ef4444;
             --sidebar:200px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -165,12 +196,10 @@ if (!empty($vendedores)) {
         .page-header h2 { font-size: 1.5rem; font-weight: 700; }
         .page-header p { font-size: 0.82rem; color: var(--text2); margin-top: 2px; }
 
-        /* BUSCADOR */
         .search-bar { margin-bottom: 16px; }
         .search-input { width: 100%; max-width: 380px; padding: 10px 16px 10px 40px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem; background: var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236b7a99' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.156a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E") no-repeat 12px center; outline: none; }
         .search-input:focus { border-color: var(--blue); }
 
-        /* TABLA */
         .table-card { background: var(--white); border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); overflow: hidden; }
         table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
         thead th { background: var(--blue); color: white; padding: 12px 16px; text-align: left; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -182,20 +211,18 @@ if (!empty($vendedores)) {
         td.center { text-align: center; }
         .sub-text { font-size: 0.72rem; color: var(--text2); margin-top: 2px; }
 
-        /* BADGES REAI */
         .reai-badge { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.15s; border: none; }
-        .reai-badge.has-data { background: #e8f0fe; color: var(--blue); }
+        .reai-badge.has-data { background: #e8f0fe; color: var(--blue); cursor: pointer; }
         .reai-badge.no-data  { background: #f4f6fb; color: #d1d5db; cursor: default; }
         .reai-badge.can-add  { background: #f0fdf4; color: #059669; }
         .reai-badge:hover:not(.no-data) { transform: scale(1.15); }
 
-        /* MODAL */
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center; }
         .modal-overlay.open { display: flex; }
         .modal { background: white; border-radius: 16px; padding: 28px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
         .modal-title { font-size: 1rem; font-weight: 700; line-height: 1.3; }
-        .modal-close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text2); line-height: 1; flex-shrink: 0; margin-left: 12px; }
+        .modal-close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text2); flex-shrink: 0; margin-left: 12px; }
 
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
@@ -215,10 +242,9 @@ if (!empty($vendedores)) {
         .asunto-a { background: #fee2e2; color: #991b1b; }
         .asunto-i { background: #f3e8ff; color: #6b21a8; }
         .historial-fecha { font-size: 0.75rem; color: var(--text2); }
-        .historial-desc { font-size: 0.82rem; color: var(--text); margin-top: 6px; }
+        .historial-desc { font-size: 0.82rem; margin-top: 6px; }
         .historial-evidencia { margin-top: 8px; }
         .historial-evidencia a { font-size: 0.78rem; color: var(--blue); text-decoration: none; font-weight: 600; }
-
         .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         .section-label { font-size: 0.78rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; font-weight: 700; }
 
@@ -226,9 +252,8 @@ if (!empty($vendedores)) {
         .toast.show { display: block; }
         .toast.success { background: #065f46; }
         .toast.error   { background: #991b1b; }
-
-        .empty-state { text-align: center; padding: 48px; color: var(--text2); font-size: 0.88rem; }
         .hidden { display: none; }
+        .empty-state { text-align: center; padding: 48px; color: var(--text2); font-size: 0.88rem; }
     </style>
 </head>
 <body>
@@ -251,7 +276,7 @@ if (!empty($vendedores)) {
         <h2>REAI — Seguimiento de Colaboradores</h2>
         <p><?= date('d \d\e F Y') ?> ·
         <?php if ($puede_capturar): ?>
-            <span style="color:#059669;font-weight:700;">✓ Puedes capturar registros</span>
+            <span style="color:#059669;font-weight:700;">✓ Captura habilitada</span>
         <?php else: ?>
             <span style="color:var(--text2);">Solo visualización</span>
         <?php endif; ?>
@@ -263,7 +288,7 @@ if (!empty($vendedores)) {
     <?php else: ?>
 
     <div class="search-bar">
-        <input type="text" class="search-input" id="buscador" placeholder="Buscar colaborador..." oninput="filtrarTabla()">
+        <input type="text" class="search-input" id="buscador" placeholder="Buscar por colaborador o coach..." oninput="filtrarTabla()">
     </div>
 
     <div class="table-card">
@@ -281,36 +306,31 @@ if (!empty($vendedores)) {
             </thead>
             <tbody id="tablaBody">
             <?php foreach ($vendedores as $vend):
-                $tgs        = $vend['numero_talento_gs'];
-                $nombre     = $vend['nombre_colaborador'];
-                $antig      = $vend['antiguedad'] ?? 0;
-                $coach_nom  = $vend['nombre_coach'] ?? '—';
-                $counts     = $reai_counts[$tgs] ?? [];
-                $cnt_r      = $counts['Retroalimentación'] ?? 0;
-                $cnt_e      = $counts['ECNUs'] ?? 0;
-                $cnt_a      = $counts['Acta Administrativa'] ?? 0;
-                $cnt_i      = $counts['Incidencia'] ?? 0;
+                $tgs       = $vend['numero_talento_gs'];
+                $nombre    = $vend['nombre_colaborador'];
+                $antig     = $vend['antiguedad'] ?? 0;
+                $coach_nom = $vend['nombre_coach'] ?? '—';
+                $counts    = $reai_counts[$tgs] ?? [];
+                $cnt_r     = $counts['Retroalimentación'] ?? 0;
+                $cnt_e     = $counts['ECNUs'] ?? 0;
+                $cnt_a     = $counts['Acta Administrativa'] ?? 0;
+                $cnt_i     = $counts['Incidencia'] ?? 0;
             ?>
             <tr data-nombre="<?= strtolower(htmlspecialchars($nombre)) ?>" data-coach="<?= strtolower(htmlspecialchars($coach_nom)) ?>">
                 <td>
                     <div style="font-weight:600;"><?= htmlspecialchars($nombre) ?></div>
                     <div class="sub-text"><?= $tgs ?></div>
                 </td>
-                <td>
-                    <div style="font-size:0.82rem;"><?= htmlspecialchars($coach_nom) ?></div>
-                </td>
-                <td class="center">
-                    <span style="font-weight:700;"><?= $antig ?></span>
-                    <span class="sub-text"> m</span>
-                </td>
+                <td><div style="font-size:0.82rem;"><?= htmlspecialchars($coach_nom) ?></div></td>
+                <td class="center"><span style="font-weight:700;"><?= $antig ?></span> <span class="sub-text">m</span></td>
                 <?php
-                $asuntos = [
-                    'R' => ['Retroalimentación', $cnt_r],
-                    'E' => ['ECNUs', $cnt_e],
+                $asuntos_map = [
+                    'R' => ['Retroalimentación',   $cnt_r],
+                    'E' => ['ECNUs',               $cnt_e],
                     'A' => ['Acta Administrativa', $cnt_a],
-                    'I' => ['Incidencia', $cnt_i],
+                    'I' => ['Incidencia',           $cnt_i],
                 ];
-                foreach ($asuntos as $letra => [$asunto_val, $cnt]):
+                foreach ($asuntos_map as $letra => [$asunto_val, $cnt]):
                     $tgs_js    = addslashes($tgs);
                     $nombre_js = addslashes($nombre);
                     $asunto_js = addslashes($asunto_val);
@@ -324,7 +344,7 @@ if (!empty($vendedores)) {
                         </button>
                     <?php else: ?>
                         <button class="reai-badge <?= $cnt > 0 ? 'has-data' : 'no-data' ?>"
-                            <?= $cnt > 0 ? "onclick=\"abrirModal('$tgs_js','$nombre_js','$asunto_js')\"" : '' ?>
+                            <?= $cnt > 0 ? "onclick=\"abrirModal('$tgs_js','$nombre_js','$asunto_js')\"" : 'disabled' ?>
                             title="<?= $cnt > 0 ? "$asunto_val ($cnt)" : 'Sin registros' ?>">
                             <?= $cnt > 0 ? $cnt : '—' ?>
                         </button>
@@ -357,10 +377,10 @@ let currentTalento = '', currentNombre = '', currentAsunto = '';
 const puedeCapturar = <?= $puede_capturar ? 'true' : 'false' ?>;
 
 const asuntoColors = {
-    'Retroalimentación':  'asunto-r',
-    'ECNUs':              'asunto-e',
-    'Acta Administrativa':'asunto-a',
-    'Incidencia':         'asunto-i',
+    'Retroalimentación':   'asunto-r',
+    'ECNUs':               'asunto-e',
+    'Acta Administrativa': 'asunto-a',
+    'Incidencia':          'asunto-i',
 };
 
 function filtrarTabla() {
@@ -368,7 +388,7 @@ function filtrarTabla() {
     document.querySelectorAll('#tablaBody tr').forEach(tr => {
         const nombre = tr.dataset.nombre || '';
         const coach  = tr.dataset.coach  || '';
-        tr.classList.toggle('hidden', !nombre.includes(q) && !coach.includes(q));
+        tr.classList.toggle('hidden', q !== '' && !nombre.includes(q) && !coach.includes(q));
     });
 }
 
