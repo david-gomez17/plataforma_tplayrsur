@@ -70,6 +70,7 @@ function getLideres($conexion, $dir_id_posicion, $rol, $mi_id_posicion, $semana,
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $mi_id_posicion, $semana, $anio);
     } else {
+        /*                                                                                                           LIDER A LIDER VENTA*/
         $sql = "SELECT DISTINCT id_posicion, nombre_colaborador FROM hc WHERE posicion_lr = ? AND posicion LIKE '%LIDER VENTA%' AND semana = ? AND anio = ? ORDER BY nombre_colaborador";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, "sii", $dir_id_posicion, $semana, $anio);
