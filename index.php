@@ -145,7 +145,7 @@ $anio_query = (int)date('Y');
 
 // INSTALACIONES MES
 $r_inst = kpiQuery($conexion,
-    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query",
+    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query and origen_prospecto <> '-'",
     "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
     $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
