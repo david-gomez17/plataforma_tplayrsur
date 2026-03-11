@@ -24,10 +24,10 @@ $puestos_comerciales = "'PROMOVENDEDOR PUNTO DE VENTA','VENDEDOR','VENDEDOR NEGO
 function getSubordinados($conexion, $id_pos, $semana = null, $anio = null) {
     $ids = [];
     if ($semana && $anio) {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE posicion_lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
         mysqli_stmt_bind_param($stmt, "sii", $id_pos, $semana, $anio);
     } else {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE posicion_lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
         mysqli_stmt_bind_param($stmt, "s", $id_pos);
     }
     mysqli_stmt_execute($stmt);
@@ -172,7 +172,7 @@ if ($semana_actual && $anio_actual) {
 
     $r_hc_vac = kpiQuery($conexion,
         "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=$semana_actual AND anio=$anio_actual AND posicion IN ($puestos_comerciales)",
-        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND lr IN (__PH__)",
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND posicion_lr IN (__PH__)",
         $rol, $subordinados_ids, [$semana_actual, $anio_actual], 'ii'
     );
     $kpi_hc_vac = $r_hc_vac ? (mysqli_fetch_assoc($r_hc_vac)['total'] ?? 0) : 0;
@@ -319,9 +319,11 @@ $roles_labels = [
     <a href="import/import_ventas.php" class="nav-item">
         <span class="nav-icon">📈</span> Ventas
     </a>
-    <a href="import/import_hc.php" class="nav-item">
-        <span class="nav-icon">👥</span> Headcount
+    <a href="detalle/hc_detalle.php" class="nav-item">
+    <span class="nav-icon">👥</span> Headcount
     </a>
+    <a href="detalle/reai.php" class="nav-item">
+        <span class="nav-icon">📋</span> REAI</a>
     <div class="sidebar-bottom">
         <a href="logout.php" class="logout-btn">⎋ Cerrar sesión</a>
     </div>
@@ -372,7 +374,8 @@ $roles_labels = [
         <div class="kpi-card full">
             <div class="kpi-header">
                 <div class="kpi-icon kpi-purple">👥</div>
-                <div class="kpi-label">Headcount — Semana <?= $semana_display ?> · <?= $anio_display ?></div>
+                <!-- se cambio el $semana_display(semana + 1) por $semana_base tambien el $anio_display($anio_base + 1) por $anio_actual-->
+                <div class="kpi-label">Headcount — Semana <?= $semana_base ?> · <?= $anio_actual ?></div>
             </div>
             <div class="kpi-numbers">
                 <div class="kpi-num">
