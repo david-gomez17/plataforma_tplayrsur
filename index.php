@@ -145,8 +145,7 @@ $anio_query = (int)date('Y');
 
 // INSTALACIONES MES
 $r_inst = kpiQuery($conexion,
-    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query and origen_prospecto <> "-"",
-    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> "-"",
+    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> '-'",
     $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
 $kpi_inst = $r_inst ? (mysqli_fetch_assoc($r_inst)['total'] ?? 0) : 0;
@@ -183,8 +182,8 @@ $kpi_hc_pct   = $kpi_hc_total > 0 ? round(($kpi_hc_act / $kpi_hc_total) * 100) :
 
 // MIX INSTALACIONES
 $r_mix_inst = kpiQuery($conexion,
-    "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query and origen_prospecto <> "-"",
-    "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> "-"",
+    "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query and origen_prospecto <> '-'",
+    "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> '-'",
     $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
 $mix_inst = $r_mix_inst ? mysqli_fetch_assoc($r_mix_inst) : ['p3'=>0,'p2'=>0];
@@ -212,8 +211,8 @@ for ($i = 5; $i >= 0; $i--) {
     $meses_labels[] = date('M Y', $ts);
 
     $ri = kpiQuery($conexion,
-        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=$m AND YEAR(fecha)=$a and origen_prospecto <> "-"",
-        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> "-"",
+        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=$m AND YEAR(fecha)=$a and origen_prospecto <> '-'",
+        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> '-'",
         $rol, $folio_ids, [$m, $a], 'ii'
     );
     $rv = kpiQuery($conexion,
