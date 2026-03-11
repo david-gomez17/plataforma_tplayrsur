@@ -392,7 +392,7 @@ function filtrarTabla() {
     });
 }
 
-function abrirModal(talento, nombre, asunto) {
+function abrirModal(talento, nombre, asunto) {  
     currentTalento = talento;
     currentNombre  = nombre;
     currentAsunto  = asunto;
