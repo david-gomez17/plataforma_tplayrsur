@@ -212,8 +212,8 @@ for ($i = 5; $i >= 0; $i--) {
     $meses_labels[] = date('M Y', $ts);
 
     $ri = kpiQuery($conexion,
-        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=$m AND YEAR(fecha)=$a",
-        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
+        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=$m AND YEAR(fecha)=$a and origen_prospecto <> '-'",
+        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> '-'",
         $rol, $folio_ids, [$m, $a], 'ii'
     );
     $rv = kpiQuery($conexion,
