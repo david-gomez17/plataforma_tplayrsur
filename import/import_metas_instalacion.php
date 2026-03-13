@@ -197,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
     <a href="import_instalaciones.php" class="nav-item"><span class="nav-icon">🔧</span> Instalaciones</a>
     <a href="import_ventas.php" class="nav-item"><span class="nav-icon">📈</span> Ventas</a>
     <a href="import_hc.php" class="nav-item"><span class="nav-icon">👥</span> Headcount</a>
-    <a href="import_metas.php" class="nav-item active"><span class="nav-icon">🎯</span> Metas</a>
+    <a href="import_metas_instalacion.php" class="nav-item active"><span class="nav-icon">🎯</span> Metas</a>
     <div class="sidebar-bottom">
         <a href="../logout.php" class="logout-btn">⎋ Cerrar sesión</a>
     </div>
@@ -242,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                         onclick="this.form.enctype='multipart/form-data'">
                         ✅ Confirmar importación
                     </button>
-                    <a href="import_metas.php" class="btn btn-cancel">✕ Cancelar</a>
+                    <a href="import_metas_instalacion.php" class="btn btn-cancel">✕ Cancelar</a>
                 </form>
             </div>
         </div>
