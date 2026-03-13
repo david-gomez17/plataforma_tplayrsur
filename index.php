@@ -203,7 +203,7 @@ $vent_2p = (int)($mix_vent['p2'] ?? 0);
 
 // EVOLUCIÓN 6 MESES
 $evolucion_inst = [];
-$evolucion_vent = [];
+$evolucion_vent = [];   
 $meses_labels   = [];
 for ($i = 5; $i >= 0; $i--) {
     $ts = mktime(0, 0, 0, $mes_actual - $i, 1, $anio_query);
