@@ -34,26 +34,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
             $sheet       = $spreadsheet->getActiveSheet();
             $rows        = $sheet->toArray(null, true, true, true);
 
-            // Detectar encabezados en fila 1
             $headers = array_map('trim', $rows[1]);
-            // Mapeo de columnas Excel → BD
+
             $map = [
-                'Cluster'             => 'cluster',
-                'Casas Liberadas'     => 'casas_liberadas',
-                'Distrito'            => 'distrito',
-                'Ciudad'              => 'ciudad',
-                'Plaza'               => 'plaza',
-                'Canal'               => 'canal',
-                'Región'              => 'region',
-                'Capa'                => 'capa',
-                'Fecha de liberación' => 'fecha_liberacion',
-                'Empresa'             => 'empresa',
-                'Meta'                => 'meta',
-                'Mes'                 => 'mes',
-                'Año'                 => 'anio',
+                'Cluster'            => 'cluster',
+                'Casas_Liberadas'    => 'casas_liberadas',
+                'Distrito'           => 'distrito',
+                'Ciudad'             => 'ciudad',
+                'Plaza'              => 'plaza',
+                'Canal'              => 'canal',
+                'Region'             => 'region',
+                'Capa'               => 'capa',
+                'Fecha_Liberacion'   => 'fecha_liberacion',
+                'Empresa'            => 'empresa',
+                'Meta'               => 'meta',
+                'Mes'                => 'mes',
+                'Mes_num'            => 'mes_num',
+                'Anio'               => 'anio',
+                'Dia'                => 'dia',
+                'Dias_Del_Mes'       => 'dias_del_mes',
+                'Meta_Diaria'        => 'meta_diaria',
+                'Fecha'              => 'fecha',
             ];
 
-            // Encontrar índice de cada columna
             $col_index = [];
             foreach ($headers as $col_letra => $col_nombre) {
                 foreach ($map as $excel_name => $bd_name) {
@@ -63,48 +66,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                 }
             }
 
-            $meses_map = [
-                'ENERO'=>1,'FEBRERO'=>2,'MARZO'=>3,'ABRIL'=>4,'MAYO'=>5,'JUNIO'=>6,
-                'JULIO'=>7,'AGOSTO'=>8,'SEPTIEMBRE'=>9,'OCTUBRE'=>10,'NOVIEMBRE'=>11,'DICIEMBRE'=>12
-            ];
-
             if (isset($_POST['confirmar'])) {
-                // IMPORTAR
                 $insertados = 0;
                 $errores    = 0;
 
-                // Limpiar metas del mismo mes/año si ya existen
-                $mes_check  = null;
-                $anio_check = null;
+                // Detectar mes y año para limpiar antes de insertar
+                $mes_check = null; $anio_check = null;
+                foreach ($rows as $i => $row) {
+                    if ($i === 1) continue;
+                    if (empty($row[$col_index['meta'] ?? ''])) continue;
+                    if (!$mes_check) {
+                        $mes_check  = $row[$col_index['mes_num'] ?? ''] ?? null;
+                        $anio_check = $row[$col_index['anio'] ?? ''] ?? null;
+                        break;
+                    }
+                }
+                if ($mes_check && $anio_check) {
+                    mysqli_query($conexion, "DELETE FROM metas_instalacion WHERE mes_num=$mes_check AND anio=$anio_check");
+                }
 
                 foreach ($rows as $i => $row) {
-                    if ($i === 1) continue; // saltar encabezados
+                    if ($i === 1) continue;
                     if (empty($row[$col_index['meta'] ?? ''])) continue;
 
-                    $cluster          = trim($row[$col_index['cluster'] ?? ''] ?? '');
-                    $casas_liberadas  = (int)($row[$col_index['casas_liberadas'] ?? ''] ?? 0);
-                    $distrito         = trim($row[$col_index['distrito'] ?? ''] ?? '');
-                    $ciudad           = trim($row[$col_index['ciudad'] ?? ''] ?? '');
-                    $plaza            = trim($row[$col_index['plaza'] ?? ''] ?? '');
-                    $canal            = trim($row[$col_index['canal'] ?? ''] ?? '');
-                    $region           = trim($row[$col_index['region'] ?? ''] ?? '');
-                    $capa             = trim($row[$col_index['capa'] ?? ''] ?? '');
-                    $fecha_lib        = trim($row[$col_index['fecha_liberacion'] ?? ''] ?? '');
-                    $empresa          = trim($row[$col_index['empresa'] ?? ''] ?? '');
-                    $meta             = (int)($row[$col_index['meta'] ?? ''] ?? 0);
-                    $mes_txt          = strtoupper(trim($row[$col_index['mes'] ?? ''] ?? ''));
-                    $anio             = (int)($row[$col_index['anio'] ?? ''] ?? 0);
-                    $mes_num          = $meses_map[$mes_txt] ?? 0;
+                    $cluster      = trim($row[$col_index['cluster'] ?? ''] ?? '');
+                    $casas_lib    = (int)($row[$col_index['casas_liberadas'] ?? ''] ?? 0);
+                    $distrito     = trim($row[$col_index['distrito'] ?? ''] ?? '');
+                    $ciudad       = trim($row[$col_index['ciudad'] ?? ''] ?? '');
+                    $plaza        = trim($row[$col_index['plaza'] ?? ''] ?? '');
+                    $canal        = trim($row[$col_index['canal'] ?? ''] ?? '');
+                    $region       = trim($row[$col_index['region'] ?? ''] ?? '');
+                    $capa         = trim($row[$col_index['capa'] ?? ''] ?? '');
+                    $fecha_lib    = trim($row[$col_index['fecha_liberacion'] ?? ''] ?? '');
+                    $empresa      = trim($row[$col_index['empresa'] ?? ''] ?? '');
+                    $meta         = (int)($row[$col_index['meta'] ?? ''] ?? 0);
+                    $mes          = trim($row[$col_index['mes'] ?? ''] ?? '');
+                    $mes_num      = (int)($row[$col_index['mes_num'] ?? ''] ?? 0);
+                    $anio         = (int)($row[$col_index['anio'] ?? ''] ?? 0);
+                    $dia          = (int)($row[$col_index['dia'] ?? ''] ?? 0);
+                    $dias_mes     = (int)($row[$col_index['dias_del_mes'] ?? ''] ?? 0);
+                    $meta_diaria  = (float)($row[$col_index['meta_diaria'] ?? ''] ?? 0);
+                    $fecha_raw    = $row[$col_index['fecha'] ?? ''] ?? '';
 
-                    if (!$mes_check) { $mes_check = $mes_num; $anio_check = $anio; }
+                    // Convertir fecha
+                    if ($fecha_raw instanceof \DateTime) {
+                        $fecha = $fecha_raw->format('Y-m-d');
+                    } elseif (is_numeric($fecha_raw)) {
+                        $fecha = date('Y-m-d', ($fecha_raw - 25569) * 86400);
+                    } else {
+                        $fecha = date('Y-m-d', strtotime($fecha_raw));
+                    }
 
                     $stmt = mysqli_prepare($conexion,
-                        "INSERT INTO metas_instalacion (cluster, casas_liberadas, distrito, ciudad, plaza, canal, region, capa, fecha_liberacion, empresa, meta, mes, anio)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-                    mysqli_stmt_bind_param($stmt, "sissssssssiii",
-                        $cluster, $casas_liberadas, $distrito, $ciudad, $plaza,
+                        "INSERT INTO metas_instalacion (cluster, casas_liberadas, distrito, ciudad, plaza, canal, region, capa, fecha_liberacion, empresa, meta, mes, mes_num, anio, dia, dias_del_mes, meta_diaria, fecha)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    mysqli_stmt_bind_param($stmt, "sissssssssisiiiids",
+                        $cluster, $casas_lib, $distrito, $ciudad, $plaza,
                         $canal, $region, $capa, $fecha_lib, $empresa,
-                        $meta, $mes_num, $anio);
+                        $meta, $mes, $mes_num, $anio, $dia, $dias_mes,
+                        $meta_diaria, $fecha);
 
                     if (mysqli_stmt_execute($stmt)) {
                         $insertados++;
@@ -122,17 +142,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                 foreach ($rows as $i => $row) {
                     if ($i === 1) continue;
                     if (empty($row[$col_index['meta'] ?? ''])) continue;
-                    if (count($preview) >= 5) { $total_filas++; continue; }
-
-                    $mes_txt = strtoupper(trim($row[$col_index['mes'] ?? ''] ?? ''));
-                    $preview[] = [
-                        'distrito' => trim($row[$col_index['distrito'] ?? ''] ?? ''),
-                        'canal'    => trim($row[$col_index['canal'] ?? ''] ?? ''),
-                        'meta'     => (int)($row[$col_index['meta'] ?? ''] ?? 0),
-                        'mes'      => ucfirst(strtolower($mes_txt)),
-                        'anio'     => (int)($row[$col_index['anio'] ?? ''] ?? 0),
-                    ];
                     $total_filas++;
+                    if (count($preview) < 5) {
+                        $fecha_raw = $row[$col_index['fecha'] ?? ''] ?? '';
+                        if ($fecha_raw instanceof \DateTime) {
+                            $fecha = $fecha_raw->format('Y-m-d');
+                        } elseif (is_numeric($fecha_raw)) {
+                            $fecha = date('Y-m-d', ($fecha_raw - 25569) * 86400);
+                        } else {
+                            $fecha = date('Y-m-d', strtotime($fecha_raw));
+                        }
+                        $preview[] = [
+                            'distrito'    => trim($row[$col_index['distrito'] ?? ''] ?? ''),
+                            'canal'       => trim($row[$col_index['canal'] ?? ''] ?? ''),
+                            'meta'        => (int)($row[$col_index['meta'] ?? ''] ?? 0),
+                            'meta_diaria' => round((float)($row[$col_index['meta_diaria'] ?? ''] ?? 0), 4),
+                            'fecha'       => $fecha,
+                        ];
+                    }
                 }
             }
 
@@ -150,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Importar Metas — TOTALXPEDIENT</title>
     <style>
-        :root { --blue:#2b57a7; --bg:#f4f6fb; --white:#ffffff; --text:#1a2540; --text2:#6b7a99; --border:#e2e8f4; --green:#10b981; --red:#ef4444; --sidebar:200px; }
+        :root { --blue:#2b57a7; --bg:#f4f6fb; --white:#ffffff; --text:#1a2540; --text2:#6b7a99; --border:#e2e8f4; --sidebar:200px; }
         * { box-sizing:border-box; margin:0; padding:0; }
         body { font-family:'Segoe UI',sans-serif; background:var(--bg); color:var(--text); display:flex; min-height:100vh; }
         .sidebar { width:var(--sidebar); background:var(--blue); min-height:100vh; position:fixed; top:0; left:0; display:flex; flex-direction:column; align-items:center; padding:28px 0; z-index:100; }
@@ -178,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
         .btn-primary { background:var(--blue); color:white; width:100%; margin-top:16px; padding:14px; font-size:1rem; }
         .btn-primary:hover { background:#1d4ed8; }
         .btn-confirm { background:#059669; color:white; margin-right:10px; }
-        .btn-cancel  { background:#6b7a99; color:white; }
+        .btn-cancel  { background:#6b7a99; color:white; text-decoration:none; padding:12px 24px; border-radius:8px; font-weight:700; font-size:0.9rem; }
         .alert { padding:14px 18px; border-radius:10px; font-size:0.88rem; font-weight:600; margin-bottom:20px; }
         .alert-success { background:#d1fae5; color:#065f46; }
         .alert-error   { background:#fee2e2; color:#991b1b; }
@@ -186,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
         th { background:var(--blue); color:white; padding:10px 14px; text-align:left; font-size:0.78rem; text-transform:uppercase; }
         td { padding:10px 14px; border-bottom:1px solid var(--border); }
         .preview-title { font-size:0.9rem; font-weight:700; margin-bottom:4px; }
-        .preview-sub { font-size:0.78rem; color:var(--text2); }
+        .preview-sub { font-size:0.78rem; color:var(--text2); margin-bottom:16px; }
     </style>
 </head>
 <body>
@@ -206,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
 <main class="main">
     <div class="page-header">
         <h2>Importar Metas de Instalación</h2>
-        <p>Solo administradores · Formato Excel (.xlsx)</p>
+        <p>Solo administradores · Sube el archivo generado por el script Python</p>
     </div>
 
     <?php if ($mensaje): ?>
@@ -214,13 +241,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
     <?php endif; ?>
 
     <?php if (!empty($preview)): ?>
-        <!-- PREVIEW -->
         <div class="card">
-            <div class="preview-title">Vista previa — <?= $total_filas ?> filas encontradas</div>
+            <div class="preview-title">Vista previa — <?= number_format($total_filas) ?> filas encontradas</div>
             <div class="preview-sub">Se muestran las primeras 5 filas</div>
             <table>
                 <thead>
-                    <tr><th>Distrito</th><th>Canal</th><th>Meta</th><th>Mes</th><th>Año</th></tr>
+                    <tr><th>Distrito</th><th>Canal</th><th>Meta</th><th>Meta Diaria</th><th>Fecha</th></tr>
                 </thead>
                 <tbody>
                 <?php foreach ($preview as $p): ?>
@@ -228,32 +254,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                         <td><?= htmlspecialchars($p['distrito']) ?></td>
                         <td><?= htmlspecialchars($p['canal']) ?></td>
                         <td><?= number_format($p['meta']) ?></td>
-                        <td><?= htmlspecialchars($p['mes']) ?></td>
-                        <td><?= $p['anio'] ?></td>
+                        <td><?= $p['meta_diaria'] ?></td>
+                        <td><?= $p['fecha'] ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
-            <div style="margin-top:20px;">
+            <div style="margin-top:20px;display:flex;gap:10px;align-items:center;">
                 <form method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="confirmar" value="1">
-                    <input type="hidden" name="archivo_path" value="<?= htmlspecialchars($_FILES['archivo']['tmp_name'] ?? '') ?>">
-                    <button type="submit" name="confirmar" value="1" class="btn btn-confirm"
-                        onclick="this.form.enctype='multipart/form-data'">
-                        ✅ Confirmar importación
-                    </button>
-                    <a href="import_metas_instalacion.php" class="btn btn-cancel">✕ Cancelar</a>
+                    <button type="submit" class="btn btn-confirm">✅ Confirmar importación</button>
                 </form>
+                <a href="import_metas_instalacion.php" class="btn-cancel">✕ Cancelar</a>
             </div>
         </div>
     <?php else: ?>
-        <!-- FORMULARIO SUBIDA -->
         <div class="card">
-            <form method="POST" enctype="multipart/form-data" id="formImport">
+            <form method="POST" enctype="multipart/form-data">
                 <div class="upload-area" onclick="document.getElementById('archivo').click()">
                     <div class="upload-icon">📂</div>
                     <div class="upload-label">Arrastra tu archivo aquí o <span>selecciona un archivo</span></div>
-                    <div class="upload-label" style="margin-top:6px;">Excel (.xlsx, .xls)</div>
+                    <div class="upload-label" style="margin-top:6px;">Archivo generado por el script Python (Metas_diarias.xlsx)</div>
                     <div class="file-name" id="fileName"></div>
                     <input type="file" id="archivo" name="archivo" accept=".xlsx,.xls" onchange="mostrarNombre(this)">
                 </div>
