@@ -20,13 +20,22 @@ $total_filas = 0;
 require_once __DIR__ . '/../vendor/autoload.php';
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
-    $archivo = $_FILES['archivo']['tmp_name'];
-    $nombre  = $_FILES['archivo']['name'];
-    $ext     = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
+// Ruta temporal para conservar archivo entre preview y confirmación
+$tmp_path = sys_get_temp_dir() . '/metas_import_' . session_id() . '.xlsx';
 
-    if (!in_array($ext, ['xlsx','xls'])) {
-        $mensaje  = 'Solo se permiten archivos Excel (.xlsx o .xls)';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    // Si viene archivo nuevo lo guardamos en tmp
+    if (isset($_FILES['archivo']) && $_FILES['archivo']['error'] === 0) {
+        copy($_FILES['archivo']['tmp_name'], $tmp_path);
+    }
+
+    // Usamos siempre el tmp
+    $archivo = $tmp_path;
+    $ext     = 'xlsx';
+
+    if (!file_exists($archivo)) {
+        $mensaje  = 'No se encontró el archivo. Vuelve a subirlo.';
         $tipo_msg = 'error';
     } else {
         try {
@@ -37,24 +46,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
             $headers = array_map('trim', $rows[1]);
 
             $map = [
-                'Cluster'            => 'cluster',
-                'Casas_Liberadas'    => 'casas_liberadas',
-                'Distrito'           => 'distrito',
-                'Ciudad'             => 'ciudad',
-                'Plaza'              => 'plaza',
-                'Canal'              => 'canal',
-                'Region'             => 'region',
-                'Capa'               => 'capa',
-                'Fecha_Liberacion'   => 'fecha_liberacion',
-                'Empresa'            => 'empresa',
-                'Meta'               => 'meta',
-                'Mes'                => 'mes',
-                'Mes_num'            => 'mes_num',
-                'Anio'               => 'anio',
-                'Dia'                => 'dia',
-                'Dias_Del_Mes'       => 'dias_del_mes',
-                'Meta_Diaria'        => 'meta_diaria',
-                'Fecha'              => 'fecha',
+                'Cluster'          => 'cluster',
+                'Casas_Liberadas'  => 'casas_liberadas',
+                'Distrito'         => 'distrito',
+                'Ciudad'           => 'ciudad',
+                'Plaza'            => 'plaza',
+                'Canal'            => 'canal',
+                'Region'           => 'region',
+                'Capa'             => 'capa',
+                'Fecha_Liberacion' => 'fecha_liberacion',
+                'Empresa'          => 'empresa',
+                'Meta'             => 'meta',
+                'Mes'              => 'mes',
+                'Mes_num'          => 'mes_num',
+                'Anio'             => 'anio',
+                'Dia'              => 'dia',
+                'Dias_Del_Mes'     => 'dias_del_mes',
+                'Meta_Diaria'      => 'meta_diaria',
+                'Fecha'            => 'fecha',
             ];
 
             $col_index = [];
@@ -89,26 +98,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                     if ($i === 1) continue;
                     if (empty($row[$col_index['meta'] ?? ''])) continue;
 
-                    $cluster      = trim($row[$col_index['cluster'] ?? ''] ?? '');
-                    $casas_lib    = (int)($row[$col_index['casas_liberadas'] ?? ''] ?? 0);
-                    $distrito     = trim($row[$col_index['distrito'] ?? ''] ?? '');
-                    $ciudad       = trim($row[$col_index['ciudad'] ?? ''] ?? '');
-                    $plaza        = trim($row[$col_index['plaza'] ?? ''] ?? '');
-                    $canal        = trim($row[$col_index['canal'] ?? ''] ?? '');
-                    $region       = trim($row[$col_index['region'] ?? ''] ?? '');
-                    $capa         = trim($row[$col_index['capa'] ?? ''] ?? '');
-                    $fecha_lib    = trim($row[$col_index['fecha_liberacion'] ?? ''] ?? '');
-                    $empresa      = trim($row[$col_index['empresa'] ?? ''] ?? '');
-                    $meta         = (int)($row[$col_index['meta'] ?? ''] ?? 0);
-                    $mes          = trim($row[$col_index['mes'] ?? ''] ?? '');
-                    $mes_num      = (int)($row[$col_index['mes_num'] ?? ''] ?? 0);
-                    $anio         = (int)($row[$col_index['anio'] ?? ''] ?? 0);
-                    $dia          = (int)($row[$col_index['dia'] ?? ''] ?? 0);
-                    $dias_mes     = (int)($row[$col_index['dias_del_mes'] ?? ''] ?? 0);
-                    $meta_diaria  = (float)($row[$col_index['meta_diaria'] ?? ''] ?? 0);
-                    $fecha_raw    = $row[$col_index['fecha'] ?? ''] ?? '';
+                    $cluster     = trim($row[$col_index['cluster'] ?? ''] ?? '');
+                    $casas_lib   = (int)($row[$col_index['casas_liberadas'] ?? ''] ?? 0);
+                    $distrito    = trim($row[$col_index['distrito'] ?? ''] ?? '');
+                    $ciudad      = trim($row[$col_index['ciudad'] ?? ''] ?? '');
+                    $plaza       = trim($row[$col_index['plaza'] ?? ''] ?? '');
+                    $canal       = trim($row[$col_index['canal'] ?? ''] ?? '');
+                    $region      = trim($row[$col_index['region'] ?? ''] ?? '');
+                    $capa        = trim($row[$col_index['capa'] ?? ''] ?? '');
+                    $fecha_lib   = trim($row[$col_index['fecha_liberacion'] ?? ''] ?? '');
+                    $empresa     = trim($row[$col_index['empresa'] ?? ''] ?? '');
+                    $meta        = (int)($row[$col_index['meta'] ?? ''] ?? 0);
+                    $mes         = trim($row[$col_index['mes'] ?? ''] ?? '');
+                    $mes_num     = (int)($row[$col_index['mes_num'] ?? ''] ?? 0);
+                    $anio        = (int)($row[$col_index['anio'] ?? ''] ?? 0);
+                    $dia         = (int)($row[$col_index['dia'] ?? ''] ?? 0);
+                    $dias_mes    = (int)($row[$col_index['dias_del_mes'] ?? ''] ?? 0);
+                    $meta_diaria = (float)($row[$col_index['meta_diaria'] ?? ''] ?? 0);
+                    $fecha_raw   = $row[$col_index['fecha'] ?? ''] ?? '';
 
-                    // Convertir fecha
                     if ($fecha_raw instanceof \DateTime) {
                         $fecha = $fecha_raw->format('Y-m-d');
                     } elseif (is_numeric($fecha_raw)) {
@@ -133,6 +141,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                     }
                     mysqli_stmt_close($stmt);
                 }
+
+                // Limpiar tmp
+                @unlink($tmp_path);
 
                 $mensaje  = "✅ Importación completada: $insertados filas insertadas" . ($errores > 0 ? ", $errores errores." : ".");
                 $tipo_msg = 'success';
@@ -201,11 +212,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
         .upload-label { font-size:0.9rem; color:var(--text2); }
         .upload-label span { color:var(--blue); font-weight:700; cursor:pointer; }
         .file-name { margin-top:10px; font-size:0.85rem; font-weight:600; color:var(--blue); }
-        .btn { padding:12px 24px; border:none; border-radius:8px; font-size:0.9rem; font-weight:700; cursor:pointer; transition:all 0.2s; }
-        .btn-primary { background:var(--blue); color:white; width:100%; margin-top:16px; padding:14px; font-size:1rem; }
+        .btn-primary { background:var(--blue); color:white; width:100%; margin-top:16px; padding:14px; font-size:1rem; border:none; border-radius:8px; font-weight:700; cursor:pointer; }
         .btn-primary:hover { background:#1d4ed8; }
-        .btn-confirm { background:#059669; color:white; margin-right:10px; }
-        .btn-cancel  { background:#6b7a99; color:white; text-decoration:none; padding:12px 24px; border-radius:8px; font-weight:700; font-size:0.9rem; }
+        .btn-confirm { background:#059669; color:white; padding:12px 24px; border:none; border-radius:8px; font-weight:700; font-size:0.9rem; cursor:pointer; margin-right:10px; }
+        .btn-cancel  { background:#6b7a99; color:white; text-decoration:none; padding:12px 24px; border-radius:8px; font-weight:700; font-size:0.9rem; display:inline-block; }
         .alert { padding:14px 18px; border-radius:10px; font-size:0.88rem; font-weight:600; margin-bottom:20px; }
         .alert-success { background:#d1fae5; color:#065f46; }
         .alert-error   { background:#fee2e2; color:#991b1b; }
@@ -260,12 +270,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                 <?php endforeach; ?>
                 </tbody>
             </table>
-            <div style="margin-top:20px;display:flex;gap:10px;align-items:center;">
-                <form method="POST" enctype="multipart/form-data">
+            <div style="margin-top:20px;">
+                <form method="POST">
                     <input type="hidden" name="confirmar" value="1">
-                    <button type="submit" class="btn btn-confirm">✅ Confirmar importación</button>
+                    <button type="submit" class="btn-confirm">✅ Confirmar importación</button>
+                    <a href="import_metas_instalacion.php" class="btn-cancel">✕ Cancelar</a>
                 </form>
-                <a href="import_metas_instalacion.php" class="btn-cancel">✕ Cancelar</a>
             </div>
         </div>
     <?php else: ?>
@@ -278,7 +288,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                     <div class="file-name" id="fileName"></div>
                     <input type="file" id="archivo" name="archivo" accept=".xlsx,.xls" onchange="mostrarNombre(this)">
                 </div>
-                <button type="submit" class="btn btn-primary">Ver vista previa</button>
+                <button type="submit" class="btn-primary">Ver vista previa</button>
             </form>
         </div>
     <?php endif; ?>
