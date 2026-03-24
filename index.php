@@ -24,10 +24,10 @@ $puestos_comerciales = "'PROMOVENDEDOR PUNTO DE VENTA','VENDEDOR','VENDEDOR NEGO
 function getSubordinados($conexion, $id_pos, $semana = null, $anio = null) {
     $ids = [];
     if ($semana && $anio) {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE posicion_lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
         mysqli_stmt_bind_param($stmt, "sii", $id_pos, $semana, $anio);
     } else {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE posicion_lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
         mysqli_stmt_bind_param($stmt, "s", $id_pos);
     }
     mysqli_stmt_execute($stmt);
