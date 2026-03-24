@@ -24,10 +24,10 @@ $puestos_comerciales = "'PROMOVENDEDOR PUNTO DE VENTA','VENDEDOR','VENDEDOR NEGO
 function getSubordinados($conexion, $id_pos, $semana = null, $anio = null) {
     $ids = [];
     if ($semana && $anio) {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE posicion_lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
         mysqli_stmt_bind_param($stmt, "sii", $id_pos, $semana, $anio);
     } else {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE posicion_lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
         mysqli_stmt_bind_param($stmt, "s", $id_pos);
     }
     mysqli_stmt_execute($stmt);
@@ -145,8 +145,8 @@ $anio_query = (int)date('Y');
 
 // INSTALACIONES MES
 $r_inst = kpiQuery($conexion,
-    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query and origen_prospecto <> '-'",
-    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> '-'",
+    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query",
+    "SELECT COUNT(cuenta) as total FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
     $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
 $kpi_inst = $r_inst ? (mysqli_fetch_assoc($r_inst)['total'] ?? 0) : 0;
@@ -172,7 +172,7 @@ if ($semana_actual && $anio_actual) {
 
     $r_hc_vac = kpiQuery($conexion,
         "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=$semana_actual AND anio=$anio_actual AND posicion IN ($puestos_comerciales)",
-        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND posicion_lr IN (__PH__)",
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND lr IN (__PH__)",
         $rol, $subordinados_ids, [$semana_actual, $anio_actual], 'ii'
     );
     $kpi_hc_vac = $r_hc_vac ? (mysqli_fetch_assoc($r_hc_vac)['total'] ?? 0) : 0;
@@ -181,10 +181,37 @@ if ($semana_actual && $anio_actual) {
 $kpi_hc_total = $kpi_hc_act + $kpi_hc_vac;
 $kpi_hc_pct   = $kpi_hc_total > 0 ? round(($kpi_hc_act / $kpi_hc_total) * 100) : 0;
 
+// ── META ACUMULADA VS INSTALACIONES ─────────────────────────────────────────
+$dias_transcurridos = (int)date('j');
+$kpi_meta_total     = 0;
+$kpi_meta_acum      = 0;
+$kpi_meta_pct       = 0;
+
+if ($rol === 'admin') {
+    $r_meta = mysqli_query($conexion,
+        "SELECT SUM(meta_diaria) as meta_acum, SUM(meta/dias_del_mes) as meta_diaria_total
+         FROM metas_instalacion
+         WHERE mes_num=$mes_actual AND anio=$anio_query AND dia=$dias_transcurridos");
+} else {
+    $distrito_esc = mysqli_real_escape_string($conexion, $distrito_usuario);
+    $r_meta = mysqli_query($conexion,
+        "SELECT SUM(meta_diaria) as meta_acum, SUM(meta/dias_del_mes) as meta_diaria_total
+         FROM metas_instalacion
+         WHERE mes_num=$mes_actual AND anio=$anio_query AND dia=$dias_transcurridos
+         AND distrito='$distrito_esc'");
+}
+
+if ($r_meta && $row_meta = mysqli_fetch_assoc($r_meta)) {
+    $meta_diaria_total = (float)($row_meta['meta_diaria_total'] ?? 0);
+    $kpi_meta_acum     = round($meta_diaria_total * $dias_transcurridos);
+    $kpi_meta_total    = $kpi_meta_acum; // meta acumulada a hoy
+    $kpi_meta_pct      = $kpi_meta_acum > 0 ? round(($kpi_inst / $kpi_meta_acum) * 100) : 0;
+}
+
 // MIX INSTALACIONES
 $r_mix_inst = kpiQuery($conexion,
-    "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query and origen_prospecto <> '-'",
-    "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> '-'",
+    "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=$mes_actual AND YEAR(fecha)=$anio_query",
+    "SELECT SUM(plan LIKE '%TV%') as p3, SUM(plan NOT LIKE '%TV%') as p2 FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
     $rol, $folio_ids, [$mes_actual, $anio_query], 'ii'
 );
 $mix_inst = $r_mix_inst ? mysqli_fetch_assoc($r_mix_inst) : ['p3'=>0,'p2'=>0];
@@ -203,7 +230,7 @@ $vent_2p = (int)($mix_vent['p2'] ?? 0);
 
 // EVOLUCIÓN 6 MESES
 $evolucion_inst = [];
-$evolucion_vent = [];   
+$evolucion_vent = [];
 $meses_labels   = [];
 for ($i = 5; $i >= 0; $i--) {
     $ts = mktime(0, 0, 0, $mes_actual - $i, 1, $anio_query);
@@ -212,8 +239,8 @@ for ($i = 5; $i >= 0; $i--) {
     $meses_labels[] = date('M Y', $ts);
 
     $ri = kpiQuery($conexion,
-        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=$m AND YEAR(fecha)=$a and origen_prospecto <> '-'",
-        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__) and origen_prospecto <> '-'",
+        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=$m AND YEAR(fecha)=$a",
+        "SELECT COUNT(cuenta) as t FROM instalaciones WHERE MONTH(fecha)=? AND YEAR(fecha)=? AND folio_empleado IN (__PH__)",
         $rol, $folio_ids, [$m, $a], 'ii'
     );
     $rv = kpiQuery($conexion,
@@ -294,6 +321,14 @@ $roles_labels = [
         .kpi-val.purple { color: var(--purple); }
         .kpi-val.red    { color: var(--red); }
         .kpi-sub { font-size: 0.7rem; color: var(--text2); margin-top: 4px; font-weight: 600; }
+        .progress-bar-wrap { margin-top: 14px; }
+        .progress-bar-bg { background: #e2e8f4; border-radius: 99px; height: 10px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+        .progress-bar-fill.good    { background: #10b981; }
+        .progress-bar-fill.warning { background: #f59e0b; }
+        .progress-bar-fill.danger  { background: #ef4444; }
+        .progress-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 0.7rem; color: var(--text2); font-weight: 600; }
+        .kpi-orange { background: #fff7ed; }
 
         .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
         .chart-card { background: var(--white); border-radius: 16px; padding: 22px 24px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
@@ -319,11 +354,9 @@ $roles_labels = [
     <a href="import/import_ventas.php" class="nav-item">
         <span class="nav-icon">📈</span> Ventas
     </a>
-    <a href="detalle/hc_detalle.php" class="nav-item">
-    <span class="nav-icon">👥</span> Headcount
+    <a href="import/import_hc.php" class="nav-item">
+        <span class="nav-icon">👥</span> Headcount
     </a>
-    <a href="detalle/reai.php" class="nav-item">
-        <span class="nav-icon">📋</span> REAI</a>
     <div class="sidebar-bottom">
         <a href="logout.php" class="logout-btn">⎋ Cerrar sesión</a>
     </div>
@@ -374,8 +407,7 @@ $roles_labels = [
         <div class="kpi-card full">
             <div class="kpi-header">
                 <div class="kpi-icon kpi-purple">👥</div>
-                <!-- se cambio el $semana_display(semana + 1) por $semana_base tambien el $anio_display($anio_base + 1) por $anio_actual-->
-                <div class="kpi-label">Headcount — Semana <?= $semana_base ?> · <?= $anio_actual ?></div>
+                <div class="kpi-label">Headcount — Semana <?= $semana_display ?> · <?= $anio_display ?></div>
             </div>
             <div class="kpi-numbers">
                 <div class="kpi-num">
@@ -389,6 +421,41 @@ $roles_labels = [
                 <div class="kpi-num">
                     <span class="kpi-val purple"><?= $kpi_hc_pct ?>%</span>
                     <span class="kpi-sub">ocupación</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- META ACUMULADA -->
+        <div class="kpi-card full">
+            <div class="kpi-header">
+                <div class="kpi-icon kpi-orange">🎯</div>
+                <div class="kpi-label">Avance vs Meta — Día <?= $dias_transcurridos ?> de <?= date('t') ?></div>
+            </div>
+            <div class="kpi-numbers" style="margin-bottom:0;">
+                <div class="kpi-num">
+                    <span class="kpi-val blue"><?= number_format($kpi_inst) ?></span>
+                    <span class="kpi-sub">instalaciones</span>
+                </div>
+                <div class="kpi-num">
+                    <span class="kpi-val" style="color:#f59e0b;"><?= number_format($kpi_meta_acum) ?></span>
+                    <span class="kpi-sub">meta acumulada</span>
+                </div>
+                <div class="kpi-num">
+                    <span class="kpi-val <?= $kpi_meta_pct >= 100 ? 'green' : ($kpi_meta_pct >= 80 ? '' : 'red') ?>"
+                          style="<?= $kpi_meta_pct >= 80 && $kpi_meta_pct < 100 ? 'color:#f59e0b;' : '' ?>">
+                        <?= $kpi_meta_pct ?>%
+                    </span>
+                    <span class="kpi-sub">avance</span>
+                </div>
+            </div>
+            <div class="progress-bar-wrap">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill <?= $kpi_meta_pct >= 100 ? 'good' : ($kpi_meta_pct >= 80 ? 'warning' : 'danger') ?>"
+                         style="width:<?= min($kpi_meta_pct, 100) ?>%"></div>
+                </div>
+                <div class="progress-labels">
+                    <span>0</span>
+                    <span>Meta: <?= number_format($kpi_meta_acum) ?></span>
                 </div>
             </div>
         </div>
