@@ -182,7 +182,7 @@ $kpi_hc_total = $kpi_hc_act + $kpi_hc_vac;
 $kpi_hc_pct   = $kpi_hc_total > 0 ? round(($kpi_hc_act / $kpi_hc_total) * 100) : 0;
 
 // ── META ACUMULADA VS INSTALACIONES ─────────────────────────────────────────
-$dias_transcurridos = (int)date('j', strtotime('yesterday')); // A dia Vencido
+$dias_transcurridos = (int)date('j', strtotime('-2 days'));; // A dia Vencido
 $kpi_meta_total     = 0;
 $kpi_meta_acum      = 0;
 $kpi_meta_pct       = 0;
