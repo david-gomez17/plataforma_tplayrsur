@@ -24,10 +24,10 @@ $puestos_comerciales = "'PROMOVENDEDOR PUNTO DE VENTA','VENDEDOR','VENDEDOR NEGO
 function getSubordinados($conexion, $id_pos, $semana = null, $anio = null) {
     $ids = [];
     if ($semana && $anio) {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE posicion_lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%' AND semana = ? AND anio = ?");
         mysqli_stmt_bind_param($stmt, "sii", $id_pos, $semana, $anio);
     } else {
-        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE posicion_lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
+        $stmt = mysqli_prepare($conexion, "SELECT DISTINCT id_posicion FROM hc WHERE lr = ? AND numero_talento_gs NOT LIKE '%VACANTE%'");
         mysqli_stmt_bind_param($stmt, "s", $id_pos);
     }
     mysqli_stmt_execute($stmt);
@@ -172,7 +172,7 @@ if ($semana_actual && $anio_actual) {
 
     $r_hc_vac = kpiQuery($conexion,
         "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=$semana_actual AND anio=$anio_actual AND posicion IN ($puestos_comerciales)",
-        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND posicion_lr IN (__PH__)",
+        "SELECT COUNT(*) as total FROM hc WHERE numero_talento_gs LIKE '%VACANTE%' AND semana=? AND anio=? AND posicion IN ($puestos_comerciales) AND lr IN (__PH__)",
         $rol, $subordinados_ids, [$semana_actual, $anio_actual], 'ii'
     );
     $kpi_hc_vac = $r_hc_vac ? (mysqli_fetch_assoc($r_hc_vac)['total'] ?? 0) : 0;
@@ -182,30 +182,30 @@ $kpi_hc_total = $kpi_hc_act + $kpi_hc_vac;
 $kpi_hc_pct   = $kpi_hc_total > 0 ? round(($kpi_hc_act / $kpi_hc_total) * 100) : 0;
 
 // ── META ACUMULADA VS INSTALACIONES ─────────────────────────────────────────
-$dias_transcurridos = (int)date('j', strtotime('-2 days'));; // A dia Vencido
-$kpi_meta_total     = 0;
+$dias_transcurridos = (int)date('j');
 $kpi_meta_acum      = 0;
 $kpi_meta_pct       = 0;
+$mostrar_meta       = in_array($rol, ['admin', 'director_regional', 'director_distrital']);
 
-if ($rol === 'admin') {
-    $r_meta = mysqli_query($conexion,
-        "SELECT SUM(meta_diaria) as meta_acum, SUM(meta/dias_del_mes) as meta_diaria_total
-         FROM metas_instalacion
-         WHERE mes_num=$mes_actual AND anio=$anio_query AND dia=$dias_transcurridos");
-} else {
-    $distrito_esc = mysqli_real_escape_string($conexion, $distrito_usuario);
-    $r_meta = mysqli_query($conexion,
-        "SELECT SUM(meta_diaria) as meta_acum, SUM(meta/dias_del_mes) as meta_diaria_total
-         FROM metas_instalacion
-         WHERE mes_num=$mes_actual AND anio=$anio_query AND dia=$dias_transcurridos
-         AND distrito='$distrito_esc'");
-}
-
-if ($r_meta && $row_meta = mysqli_fetch_assoc($r_meta)) {
-    $meta_diaria_total = (float)($row_meta['meta_diaria_total'] ?? 0);
-    $kpi_meta_acum     = round($meta_diaria_total * $dias_transcurridos);
-    $kpi_meta_total    = $kpi_meta_acum; // meta acumulada a hoy
-    $kpi_meta_pct      = $kpi_meta_acum > 0 ? round(($kpi_inst / $kpi_meta_acum) * 100) : 0;
+if ($mostrar_meta) {
+    if ($rol === 'admin') {
+        $r_meta = mysqli_query($conexion,
+            "SELECT SUM(meta_diaria) as meta_diaria_total
+             FROM metas_instalacion
+             WHERE mes_num=$mes_actual AND anio=$anio_query AND dia=1");
+    } else {
+        $distrito_esc = mysqli_real_escape_string($conexion, $distrito_usuario);
+        $r_meta = mysqli_query($conexion,
+            "SELECT SUM(meta_diaria) as meta_diaria_total
+             FROM metas_instalacion
+             WHERE mes_num=$mes_actual AND anio=$anio_query AND dia=1
+             AND distrito='$distrito_esc'");
+    }
+    if ($r_meta && $row_meta = mysqli_fetch_assoc($r_meta)) {
+        $meta_diaria_total = (float)($row_meta['meta_diaria_total'] ?? 0);
+        $kpi_meta_acum     = round($meta_diaria_total * $dias_transcurridos);
+        $kpi_meta_pct      = $kpi_meta_acum > 0 ? round(($kpi_inst / $kpi_meta_acum) * 100) : 0;
+    }
 }
 
 // MIX INSTALACIONES
@@ -377,7 +377,7 @@ $roles_labels = [
         </div>
     </div>
 
-    <div class="kpi-grid">  
+    <div class="kpi-grid">
         <div class="kpi-card">
             <div class="kpi-header">
                 <div class="kpi-icon kpi-blue">🔧</div>
@@ -426,6 +426,7 @@ $roles_labels = [
         </div>
 
         <!-- META ACUMULADA -->
+        <?php if ($mostrar_meta): ?>
         <div class="kpi-card full">
             <div class="kpi-header">
                 <div class="kpi-icon kpi-orange">🎯</div>
@@ -459,6 +460,7 @@ $roles_labels = [
                 </div>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 
     <div class="charts-row">
