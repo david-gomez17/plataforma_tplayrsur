@@ -262,8 +262,8 @@ if (!empty($vendedores)) {
     <div class="sidebar-logo">📊</div>
     <div class="sidebar-brand">TOTALXPEDIENT</div>
     <a href="../index.php" class="nav-item"><span class="nav-icon">⊞</span> Dashboard</a>
-    <a href="../import/import_instalaciones.php" class="nav-item"><span class="nav-icon">🔧</span> Instalaciones</a>
-    <a href="../import/import_ventas.php" class="nav-item"><span class="nav-icon">📈</span> Ventas</a>
+    <!-- <a href="import/import_instalaciones.php" class="nav-item"><span class="nav-icon">🔧</span> Instalaciones</a>
+    <a href="import/import_ventas.php" class="nav-item"><span class="nav-icon">📈</span> Ventas</a> -->
     <a href="hc_detalle.php" class="nav-item"><span class="nav-icon">👥</span> Headcount</a>
     <a href="reai.php" class="nav-item active"><span class="nav-icon">📋</span> REAI</a>
     <div class="sidebar-bottom">
